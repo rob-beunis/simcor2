@@ -1,0 +1,1556 @@
+<!doctype html>
+<html lang="en" translate="no" class="notranslate">
+<head>
+<meta charset="utf-8">
+<meta name="google" content="notranslate">
+<!-- Privacy-friendly visitor counter (GoatCounter: no cookies, no personal data). Counting is done
+     explicitly in the script below (page opened, demo chosen, run started); localhost is not counted. -->
+<script data-goatcounter="https://simcor2.goatcounter.com/count"
+        data-goatcounter-settings='{"no_onload": true}'
+        async src="https://gc.zgo.at/count.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DECORRELATOR – Beunis (2022b)</title>
+<meta name="description" content="Live demos accompanying R. Beunis (2022), The electrosensory lateral line lobe in mormyrid fish: a stepping stone to the understanding of the cerebellum? Part 2 (the cerebellum): the decorrelation procedure applied to the Purkinje cell (iBCM rule, Ca-threshold).">
+<!--
+  DECORRELATOR - web version (HTML/JavaScript) of the DECORRELATOR form of the author's article reader
+  CEREBREADER.PRG (R. Beunis, Visual FoxPro 9.0). One self-contained file, no external libraries.
+
+  Article:  Beunis R. (2022b) The electrosensory lateral line lobe in mormyrid fish : a stepping stone
+            to the understanding of the cerebellum ? (Part 2/2 : the cerebellum). Zenodo, doi:10.5281/zenodo.17613147
+  (The program is the same as in the repository simcor1 for Part 1; this page shows the demos of Part 2.)
+
+  URL parameters:  ?demo=N        the demo numbers of the original program (demo-1-N in the article videos)
+                   &speed=0.25..16   &seed=N (reproducible run)
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #808080; overflow: hidden; }
+  body { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  #stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; touch-action: manipulation;
+           font-family: Arial, Helvetica, "Liberation Sans", sans-serif; }
+  #cv { position: absolute; left: 0; top: 0; cursor: default; }
+  #panel { position: absolute; top: 0; background: #d4d0c8; box-sizing: border-box; padding: 5px 6px; overflow: hidden;
+           font: 11px Arial, Helvetica, sans-serif; color: #000; }
+  #panel .ttl { font-weight: bold; font-size: 13px; text-align: center; }
+  #panel .sub { font-size: 10px; text-align: center; margin-bottom: 3px; }
+  #panel .sec { font-weight: bold; font-size: 9.5px; margin: 4px 0 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #panel .row { display: flex; flex-wrap: wrap; gap: 2px; }
+  #panel button { font: bold 10px Arial, Helvetica, sans-serif; height: 19px; width: 30px; padding: 0; margin: 0;
+                  background: #e1e1e1; border: 1px solid #adadad; color: #000; cursor: pointer; }
+  #panel button:hover { background: #e5f1fb; border-color: #0078d7; }
+  #panel button.on { background: #ffff00; border: 2px solid #000; }
+  #panel button.wide { width: auto; padding: 0 6px; }
+  #panel #ctl { gap: 6px; margin: 2px 0 4px 0; }
+  #panel #ctl button { height: 30px; font-size: 12px; border: 2px solid #000; border-radius: 3px; }
+  #panel #bint { width: 118px; background: #ffd24d; }
+  #panel #bstop { width: 90px; background: #ff6b5b; color: #fff; }
+  #panel #ctl button:disabled { background: #e1e1e1; color: #a0a0a0; border-color: #adadad; cursor: default; }
+  #panel #bint.paused { background: #7ee07e; }
+  #panel #bgo { width: 100%; height: 32px; font-size: 13px; border: 2px solid #000; border-radius: 3px; margin-top: 4px; }
+  /* the start button is red on yellow as long as no demo is running */
+  #panel #bgo.blink { color: #ff0000; background: #ffff00; }
+  #info { margin-top: 6px; padding: 4px 5px; background: #fff; border: 1px solid #808080; min-height: 74px;
+          font-size: 10.5px; line-height: 1.3; white-space: pre-wrap; }
+  #info b { font-size: 11px; }
+  #spd { margin-top: 5px; }
+  #tip { position: fixed; z-index: 1000; display: none; max-width: 320px; padding: 6px 8px; background: #ffffe1;
+         border: 1px solid #000; box-shadow: 2px 2px 6px rgba(0,0,0,.4); font: 13px Arial, Helvetica, sans-serif;
+         color: #000; white-space: pre-wrap; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <div id="panel"></div>
+</div>
+<script>
+// ===================================================================================================
+// DECORRELATOR - computing core (translation of the DECORRELATOR and DASHBOARD forms of
+// CEREBREADER.PRG, R. Beunis, Visual FoxPro 9.0). Procedure names follow the original.
+// The tables SIMCOR1..4 and MATRIX become arrays (index 1..250); every value that VFP stores in a
+// table field is rounded the way VFP does it (fld). The dashboard form is not shown in the article
+// version, but its spinners and captions are kept, because the demo text (LBP) is built from them.
+// ===================================================================================================
+"use strict";
+
+// ---- VFP helpers ------------------------------------------------------------------------------------
+// REPLACE into a numeric field N(w,d): VFP first rounds the exact binary value to d+3 decimals,
+// then that decimal number half away from zero to d decimals (measured in VFP 9).
+function fld(x, d) {
+  if (!isFinite(x)) return x;
+  const neg = x < 0;
+  const s = Math.abs(x).toFixed(d + 3);
+  const n = Number(s.replace(".", ""));
+  const m = n + 500;
+  const q = (m - (m % 1000)) / 1000;
+  const r = q / Math.pow(10, d);
+  return neg && r !== 0 ? -r : r;
+}
+// STR(n, len, dec): same rounding; fewer decimals when the number does not fit, else asterisks
+function vstr(x, len, dec) {
+  if (len === undefined) len = 10;
+  if (dec === undefined) dec = 0;
+  for (let dd = dec; dd >= 0; dd--) {
+    const v = fld(x, dd);
+    let s = Math.abs(v).toFixed(dd);
+    if (v < 0) s = "-" + s;
+    if (s.length <= len) return s.padStart(len);
+  }
+  return "*".repeat(len);
+}
+const ltrim = s => s.replace(/^ +/, "");
+const vint = x => Math.trunc(x);                       // INT(): towards zero
+// ROUND(n,d): half away from zero (on the decimal value, as STR does)
+const vround = (x, d) => fld(x, d);
+// VAL(): reads the leading number ("." is the decimal point)
+function vval(s) {
+  const m = /^\s*([+-]?(\d+\.?\d*|\.\d+))/.exec(s);
+  return m ? parseFloat(m[1]) : 0;
+}
+// Park-Miller generator: exact in doubles, also used in the VFP test copy (XRAND)
+function parkMiller(seed) {
+  let s = seed % 2147483647;
+  if (s <= 0) s += 2147483646;
+  return function () { s = (s * 16807) % 2147483647; return s / 2147483647; };
+}
+
+// ---- Constants ----------------------------------------------------------------------------------------
+const STEPS = 250, LEFT1 = 30, LEFT2 = 330, HI = 95;
+const C = {
+  ZWART: "#000000", LICHTGRIJS: "#c0c0c0", GRIJS: "#808080", WIT: "#ffffff",
+  LICHTROOD: "#ff8080", ROOD: "#ff0000", DONKERROOD: "#800000",
+  BLAUW: "#0000ff", GEEL: "#ffff00", CYAAN: "#00ffff", LICHTBLAUW: "#c0c0ff", LICHTGEEL: "#ffff80"
+};
+
+// MEM.DBF: field -> decimals (null = character field)
+const MEMFIELDS = [["S1", 0], ["S1JIT", 0], ["S1LIFT", 0], ["S2", 0], ["S2JIT", 0], ["S2LIFT", 0], ["ISI", 0], ["USDUR", 0],
+  ["USFORCE", 0], ["S4START", 0], ["AUTOLIFT", 0], ["ILFMAX", 0], ["F3_13", 0], ["F3_4", 0], ["F3_5", 0], ["F3_6", 0],
+  ["F3_7", 0], ["IBCM", 0], ["CAP", 1], ["P", 1], ["D", 1], ["P0", 3], ["D0", 2], ["CWA", 0], ["WA", 0], ["GFDUR", 0],
+  ["GFDMODE", 0], ["GFTRIG", 0], ["GFTMODE", 0], ["MODE", 0], ["VARIANT", 0], ["DEMO", 0], ["PEN", 0], ["CA", 0],
+  ["B", 0], ["N", 0], ["MGCFUC", 0], ["DISPLAY", null], ["TIMES", 0], ["DLW", 0], ["STOP", 0], ["SLOW", 0]];
+const MEMDEC = Object.fromEntries(MEMFIELDS);
+// pcFields / pcObjects: dashboard object for each field (same position)
+const PCFIELDS = ["S1", "S1JIT", "S1LIFT", "S2", "S2JIT", "S2LIFT", "ISI", "USDUR", "USFORCE", "S4START", "AUTOLIFT", "ILFMAX",
+  "F3_13", "F3_4", "F3_5", "F3_6", "F3_7", "IBCM", "CAP", "P", "D", "P0", "D0", "CWA", "WA", "GFDUR", "GFDMODE", "GFTRIG",
+  "GFTMODE", "MODE", "VARIANT", "DEMO", "PEN", "CA", "B", "N", "MGCFUC", "DISPLAY", "TIMES", "DLW", "STOP", "SLOW"];
+const PCOBJECTS = ["SP1_1", "OP1_2", "SP1_3", "SP2_1", "OP2_2", "SP2_3", "SP2_4", "SP2_5", "SP2_6", "SP1_8", "OP2_7", "SP2_8",
+  "SP3_1", "SP3_4", "SP3_5", "SP3_6", "SP3_7", "SP3_8", "SP3_9", "SP4_1", "SP4_2", "SP4_3", "SP4_4", "OP4_5", "SP4_6", "SP4_7",
+  "SP4_8", "SP4_9", "SP5_9", "SP5_1", "SP5_2", "SP5_3", "OP5_4", "SP5_5", "SP5_6", "SP5_7", "SP5_8", "TX6_9"];
+// SPDB.Init: [SpinnerLowValue, SpinnerHighValue, Value]
+const BIG = 2147483647;
+const SPINIT = {
+  SP1_1: [1, 5, 1], SP2_1: [1, 6, 1], SP1_3: [0, 200, 0], SP2_3: [0, 200, 0], SP1_8: [-1, 200, -1], SP2_4: [0, 250, 0],
+  SP2_5: [0, 20, 0], SP2_6: [0, 300, 0], SP2_8: [0, 10, 1], SP3_1: [1, 3, 1], SP3_4: [0, 8, 0], SP3_5: [0, 8, 0],
+  SP3_6: [0, 1, 0], SP3_7: [0, 1, 0], SP3_8: [0, 1, 0], SP3_9: [-300, 300, 0], SP4_1: [-20, 20, 2], SP4_2: [-20, 20, 2],
+  SP4_3: [-10, 10, 0], SP4_4: [-10, 10, 0], SP4_6: [0, 5, 0], SP4_7: [1, 250, 0], SP4_8: [1, 7, 1], SP4_9: [1, 250, 1],
+  SP5_1: [1, 7, 1], SP5_2: [0, 70, 0], SP5_3: [1, 99, 1], SP5_8: [1, 2, 1], SP5_9: [0, 3, 1],
+  SP5_5: [-BIG, BIG, 0], SP5_6: [-BIG, BIG, 0], SP5_7: [-BIG, BIG, 0]
+};
+// demo settings (PROCEDURE DEMO of the DECORRELATOR form); only the first CASE of a number counts
+const DEMOS = {
+  4: "MGCFUC=1,MODE=1,F3_13=1,S1=1,S2=1,S4START=-1",
+  5: "MGCFUC=1,MODE=1,F3_13=1,S1=1,S2=1,S4START=-1,DISPLAY='1234500LF'",
+  6: "MGCFUC=1,MODE=1,F3_13=2,S1=1,S2=1,S4START=-1",
+  7: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,P=1,D=1",
+  8: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,P=2,D=2",
+  9: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,P=5,D=5",
+  10: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,P=10,D=10",
+  11: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,P=5,D=2",
+  12: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,P=2,D=5",
+  13: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,P=3,D=2",
+  14: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,P=2,D=3",
+  15: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S2JIT=1,S4START=-1,P=2,D=2",
+  16: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S1JIT=1,S4START=-1,P=2,D=2",
+  17: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,WA=1,CWA=1,P=2,D=2",
+  18: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,WA=2,CWA=1,P=2,D=2",
+  19: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,WA=5,CWA=1,P=2,D=2",
+  21: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,WA=1,CWA=0,P=2,D=2",
+  22: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,WA=1,CWA=0,P=4,D=2",
+  23: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,WA=2,CWA=0,P=2,D=2",
+  24: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,WA=2,CWA=0,P=6,D=2",
+  25: "MGCFUC=1,MODE=1,F3_13=1,S1=1,S2=1,S4START=-1",
+  26: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,ILFMAX=10,P=2,D=2,SLOW=20",
+  27: "MGCFUC=1,MODE=2,F3_4=3,F3_5=0,F3_6=0,F3_7=1,S1=3,S2=3,S4START=0,P=0,D=2,P0=1,D0=1,B=20,N=10,CA=0",
+  28: "MGCFUC=1,MODE=2,F3_4=3,F3_5=0,F3_6=0,F3_7=1,S1=3,S2=3,S4START=0,ILFMAX=2,P=0,D=2,P0=1,D0=1,B=20,N=10,CA=0",
+  29: "MGCFUC=1,MODE=2,F3_4=4,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S4START=0,P=2,D=2,P0=1,D0=1,CAP=20,B=20,N=10,CA=40",
+  30: "MGCFUC=1,MODE=2,F3_4=4,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S4START=0,P=2,D=2,P0=1,D0=1,CAP=40,B=20,N=10,CA=40",
+  31: "MGCFUC=1,MODE=2,F3_4=4,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S4START=0,P=2,D=2,P0=1,D0=1,CAP=55,B=20,N=10,CA=40",
+  32: "MGCFUC=1,MODE=2,F3_4=4,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S4START=0,ILFMAX=2,P=2,D=2,P0=1,D0=1,CAP=55,B=20,N=10,CA=40",
+  33: "MGCFUC=1,MODE=2,F3_4=3,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S4START=0,ILFMAX=2,P=2,D=2,P0=.1,D0=.1,B=20,N=10,CA=40,TIMES=5",
+  34: "MGCFUC=1,MODE=2,F3_4=3,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S4START=0,ILFMAX=2,P=2,D=2,P0=.01,D0=.01,B=20,N=10,CA=40,TIMES=25",
+  35: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S1LIFT=30,S2LIFT=30,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  36: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S1LIFT=30,S2LIFT=30,S4START=0,ILFMAX=10,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  37: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S1LIFT=26,S2LIFT=26,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  38: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S1LIFT=25,S2LIFT=25,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  39: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S1LIFT=24,S2LIFT=24,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  40: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=2,S1LIFT=20,S2LIFT=21,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  41: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=2,S1LIFT=20,S2LIFT=20,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  42: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S1LIFT=31,S2LIFT=31,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  43: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S1LIFT=33,S2LIFT=33,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  44: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S1LIFT=35,S2LIFT=35,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  45: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=2,S1LIFT=43,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  46: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=2,S1LIFT=47,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  47: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=0,S1=3,S2=2,S1LIFT=43,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  48: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S1LIFT=30,S2LIFT=30,S4START=0,P=6,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  49: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=3,S1LIFT=29,S2LIFT=29,S4START=0,P=2,D=6,P0=0,D0=0,B=20,N=10,CA=40",
+  50: "MGCFUC=1,MODE=1,F3_13=3,S1=1,S2=1,S4START=-1,ILFMAX=2,WA=2,CWA=0,P=6,D=2",
+  51: "MGCFUC=1,MODE=2,VARIANT=70,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=2,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=50,AUTOLIFT=1,PEN=0",
+  52: "MGCFUC=1,MODE=2,VARIANT=45,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=2,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=50,AUTOLIFT=1,PEN=0",
+  53: "MGCFUC=1,MODE=2,VARIANT=33,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=2,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=50,AUTOLIFT=1,PEN=0",
+  54: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=2,S1LIFT=29,S2LIFT=29,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40",
+  55: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=2,S1LIFT=29,S2LIFT=29,S4START=0,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40,PEN=1,TIMES=2",
+  56: "MGCFUC=1,MODE=2,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=3,S2=2,S1LIFT=29,S2LIFT=29,S4START=0,ILFMAX=2,P=2,D=2,P0=0,D0=0,B=20,N=10,CA=40,PEN=1,TIMES=2",
+  80: "MGCFUC=1,MODE=6,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=1,S2=1,S4START=0,P=2,D=2,P0=0,D0=0,IBCM=1,B=0,N=0,CA=42",
+  81: "MGCFUC=1,MODE=6,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=1,S2=2,S4START=0,P=2,D=2,P0=0,D0=0,IBCM=1,B=0,N=0,CA=21",
+  82: "MGCFUC=1,MODE=6,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=1,S2=2,S4START=0,P=2,D=2,P0=0,D0=0,IBCM=1,B=0,N=0,CA=11",
+  83: "MGCFUC=1,MODE=6,F3_4=0,F3_5=0,F3_6=1,F3_7=1,S1=1,S2=2,S4START=0,P=2,D=2,P0=0,D0=0,IBCM=1,B=0,N=0,CA=31"
+};
+
+// a vertical VFP Line object (class L): Top, Height (whole pixels, truncated), Left, BorderColor
+function newLines(left0) {
+  const a = [null];
+  for (let i = 1; i <= STEPS; i++) a.push({ top: -10, height: 1, left: i + left0, color: "#000000" });
+  return a;
+}
+
+class Decorrelator {
+  // opts.rand: function returning [0,1) (default Math.random)
+  // opts.height: height of the maximized form (author's screen: 542; VFP test copy: 533)
+  constructor(opts) {
+    opts = opts || {};
+    this.rand = opts.rand || Math.random;
+    this.nH = opts.height || 542;
+    this.cmd = "";                       // pcCMD
+    this.initForm();
+  }
+
+  // ---- PROCEDURE Activate of the DECORRELATOR form ---------------------------------------------------
+  initForm() {
+    this.pnIC = 0; this.pnL = 0; this.pnCycles = 0; this.pnSpeed = 3;
+    this.pnAVMinS1 = this.pnAVMinS4 = this.pnAVMinS2 = this.pnAVMinS5 = this.pnAVMinS3 = 99999;
+    this.pnMaxLFITH = 0; this.pnMaxFit = 0; this.pnF = 0; this.pnP = 0; this.pnD = 0; this.pnPv = 0; this.pnDv = 0;
+    this.pnLift1 = this.pnLift2 = this.pnLift3 = this.pnLift4 = 0; this.pnLiftM1 = this.pnLiftM2 = this.pnLiftM3 = 0;
+    this.pnAVG1 = this.pnAVG2 = this.pnAVG3 = this.pnAVG4 = this.pnAVG5 = this.pnAVG6 = 0;
+    this.pnAVMaxS2 = this.pnAVMaxS5 = 0; this.pnBShift = 0; this.pnLift = 0; this.pnMRS2 = 0; this.pnMRMAXS2 = 0;
+    this.pnLiftS1 = this.pnLiftS2 = 0;
+    this.pnDivS1 = this.pnDivS2 = this.pnDivMax = this.pnR = 1; this.pnValueSet = 1; this.pnILF = 1;
+    this.pnStart1 = this.pnStart2 = this.pnStart3 = this.pnStart4 = 1;
+    this.pnHMem = 30;
+    this.pcILF = []; this.pcGFDUR = []; this.pcWA = []; this.pcScAM = 0;
+    this.plBox = false; this.plBreak = false; this.plPause = false; this.plQuit = false;
+    this.plFlag = false; this.plEBR = false; this.plScreenShow = false;
+    this.pnTop1 = this.pnTop2 = this.pnTop3 = this.pnTop4 = this.pnTop5 = this.pnTop6 = this.pnTop7 = this.pnTop8 = 0;
+    // LBS[9,8]: 1..7 captions per MODE, 8 = top position, 9 = extra room under the baseline
+    this.LBS = []; for (let r = 0; r <= 9; r++) { this.LBS.push(new Array(9).fill("")); }
+    // tables
+    this.SIMCOR = [null];
+    for (let k = 1; k <= 4; k++) this.SIMCOR.push(this.newTable());
+    this.MATRIX = [null];
+    for (let r = 1; r <= STEPS; r++) this.MATRIX.push({ SYNAPS: new Uint8Array(STEPS + 1), SYNAVG: 0, DPC: 0, PPC: 0, DCS: 0, PCS: 0 });
+    // MEM (fresh MEM.DBF: blank record)
+    this.MEM = {};
+    for (const [f, d] of MEMFIELDS) this.MEM[f] = d === null ? "" : 0;
+    // form objects
+    this.L = {};
+    for (const n of ["L1", "L2", "L3", "L6", "L8", "LR41", "LR52", "LR63"]) this.L[n] = newLines(LEFT1);
+    for (const n of ["L4", "L5", "L7", "LR14", "LR25", "LR36", "LFIT25"]) this.L[n] = newLines(LEFT2);
+    this.obj = {};
+    const lb = (o) => Object.assign({ top: 0, left: 0, height: 0, width: 0, visible: true, caption: "" }, o);
+    for (let k = 1; k <= 8; k++) {
+      this.obj["LBS" + k] = lb({ left: k <= 3 ? LEFT1 : LEFT2, width: STEPS, height: 12 });
+      this.obj["LTA" + k] = lb({ left: k > 3 ? LEFT2 - 10 : LEFT1 - 10, width: 270, color: C.ZWART });
+    }
+    this.obj.LTC3 = lb({ left: LEFT1 - 10, width: 270, color: C.WIT });
+    this.obj.LTB3 = lb({ left: LEFT1 - 10, width: 270, color: C.DONKERROOD });
+    this.obj.LTN3 = lb({ left: LEFT1 - 10, width: 270, color: C.BLAUW });
+    this.obj.LTC5 = lb({ left: LEFT2 - 10, width: 270, color: C.WIT });
+    for (const n of ["LTCL3", "LTBL3", "LTNL3", "LTCL5"]) this.obj[n] = lb({ left: 5, width: 12, height: 10 });
+    this.obj.LTCL3.caption = "Ltcl3"; this.obj.LTBL3.caption = "Ltbl3"; this.obj.LTNL3.caption = "Ltnl3"; this.obj.LTCL5.caption = "Ltcl5";
+    this.obj.LB01 = lb({ left: LEFT2 + 1, width: STEPS, height: 5, visible: false, color: C.LICHTROOD });
+    this.obj.LB011 = lb({ left: LEFT2 + 1, width: STEPS, height: 5, visible: false, color: C.WIT });
+    this.obj.LB02 = lb({ left: LEFT2 + 1, width: STEPS, height: 5, visible: false, color: C.CYAAN });
+    this.obj.LB022 = lb({ left: LEFT2 + 1, width: STEPS, height: 5, visible: false, color: C.WIT });
+    this.obj.S5HALT = lb({ left: LEFT2 - 10, width: 270, visible: false, color: C.GEEL });
+    this.obj.LBP = lb({ left: LEFT1, width: STEPS, height: 180, caption: "Decorrelating algorithm" });
+    this.obj.FIT1 = lb({ left: LEFT2, width: STEPS, height: 30, caption: "" });
+    this.boxes = [];                     // thisform.Box (demo 25)
+    // dashboard
+    this.SP = {};
+    for (const k in SPINIT) this.SP[k] = { low: SPINIT[k][0], high: SPINIT[k][1], value: SPINIT[k][2] };
+    this.OP = { OP1_2: 0, OP2_2: 0, OP2_7: 0, OP4_5: 0, OP5_4: 0 };
+    this.OPCAP = { OP1_2: "S1 with jitter", OP2_2: "S2 with jitter", OP2_7: "Set autolift on", OP4_5: "Correlated\raddressings", OP5_4: "Let PEN adjust B and Ca" };
+    this.TX = { TX6_9: "" };
+    this.CB = {};                        // captions
+    for (const k in SPINIT) { const c = "CB" + k.slice(2); this.CB[c] = "Cb" + k.slice(2); }
+    this.EN = {};                        // Enabled (default .T.)
+    // Activate: PNTOP, dashboard Activate (MEMGET, MEM('')), FIT1.Top, DASHBOARDCOHERENCE
+    this.PNTOP();
+    this.obj.LBP.top = this.nH - this.obj.LBP.height - 2;
+    this.obj.FIT1.top = this.nH - 15;
+    this.MEMGET();
+    this.MEMLIST("");
+    this.DASHBOARDCOHERENCE();
+  }
+  newTable() {
+    const t = [null];
+    for (let r = 1; r <= STEPS; r++) t.push({ SUMTS: 0, AVGTS: 0, LFITH25: 0, S1VAL: 0, S2VAL: 0, S3VAL: 0, S4VAL: 0, S5VAL: 0, S6VAL: 0 });
+    return t;
+  }
+  enabled(name) { return this.EN[name] !== false; }
+
+  // ---- REPLACE helpers -------------------------------------------------------------------------------
+  // field decimals: SUMTS n(8,2), AVGTS n(10,4), LFITH25 n(10,2), S1VAL..S6VAL n(7,2)
+  setS(rec, f, v) { rec[f] = fld(v, f === "AVGTS" ? 4 : 2); }
+  setMem(f, v) { const d = MEMDEC[f]; this.MEM[f] = d === null ? v : fld(v, d); }
+
+  // ======================================================================================================
+  // STEP: one timeslice
+  // ======================================================================================================
+  STEP() {
+    const M = this.MEM;
+    const nTimes = M.MODE === 3 ? 1 : M.MODE === 4 ? 2 : M.MODE === 5 ? 4 : 1;
+    const T1 = this.SIMCOR[1];
+    if (this.pnL === 0 && (this.pnIC === 0 || M.S1JIT === 1 || M.AUTOLIFT === 1)) {
+      this.MAKE_S1(1);
+      if ([4, 5, 6].includes(M.MODE)) this.MAKE_S1(2);
+      if (M.MODE === 5) { this.MAKE_S1(3); this.MAKE_S1(4); }
+      if ([3, 4, 5, 6, 7].includes(M.MODE)) this.MAKE_MATRIX();
+    }
+    if (this.pnL === 0 && (this.pnIC === 0 || ([1, 2, 6].includes(M.MODE) && M.S2 !== 6))) {
+      this.MAKE_S2(1);
+      for (let r = 1; r <= STEPS; r++) this.setS(T1[r], "S3VAL", T1[r].S1VAL + T1[r].S2VAL);
+    }
+    this.pnL++;
+    const pnL = this.pnL;
+    if (M.ILFMAX === 1) this.pnILF = 1;
+    else if (M.ILFMAX > 1) this.pnILF = this.pcILF[pnL] / 10;
+    else if (M.ILFMAX === 0) this.pnILF = pnL < 125 ? 2 : 1;
+    const pnILF = this.pnILF, pnP = this.pnP, pnD = this.pnD;
+    const R = T1[pnL];
+    if (this.pnIC === 0) {
+      this.setS(R, "AVGTS", M.S4START === -1 ? R.S3VAL : M.S4START);
+    } else if (M.MODE === 1) {                          // basic formulae, P and D in parallel
+      if (M.F3_13 === 1) {                              // SUM and AVG
+        this.setS(R, "SUMTS", R.SUMTS + R.S3VAL);
+        this.setS(R, "AVGTS", R.SUMTS / this.pnIC);
+      } else if (M.F3_13 === 2) {                       // AVG derived
+        this.setS(R, "AVGTS", R.AVGTS - R.AVGTS * (1 / (this.pnIC + 1)) + R.S3VAL * (1 / (this.pnIC + 1)));
+        if (pnL === STEPS) {
+          this.pnPv = 100 * (1 / this.pnIC);
+          this.pnDv = 100 - 100 * (this.pnIC / (this.pnIC + 1));
+        }
+      } else if (M.F3_13 === 3) {                       // fixed P and D
+        this.setS(R, "AVGTS", R.AVGTS - R.AVGTS * pnILF * pnD + R.S3VAL * pnP);
+        if (M.WA > 0) this.SCATTERADDRESS(pnP, pnD, R.S3VAL);
+      }
+    } else if (M.MODE === 2) {                          // ELL
+      let nAVGTS = 0;
+      const nAS = R.AVGTS * pnILF + R.S3VAL;            // the 'algebraic summing'
+      if (M.F3_4 < 5) nAVGTS = nAVGTS + this.NONASSOCP(M.F3_4, R);
+      else if (nAS < M.B) nAVGTS = nAVGTS + this.NONASSOCP(M.F3_4 - 4, R);
+      if (M.F3_5 < 5) nAVGTS = nAVGTS + this.NONASSOCD(M.F3_5, R);
+      else if (nAS < M.B) nAVGTS = nAVGTS + this.NONASSOCD(M.F3_5 - 4, R);
+      if (M.F3_6 === 1) {                               // BSa-P%
+        if (nAS >= M.B + this.pnBShift && nAS < M.CA + this.pnBShift) nAVGTS = nAVGTS + (M.CA + this.pnBShift - nAS) * pnP;
+      }
+      if (M.F3_7 === 1) {                               // BSa-D%
+        if (nAS >= M.B + this.pnBShift && nAS >= M.CA + this.pnBShift) nAVGTS = nAVGTS + (M.CA + this.pnBShift - nAS) * pnD;
+      }
+      if (M.WA > 0) this.SCATTERADDRESS_ELL(pnP, pnD, R.S3VAL);
+      else this.setS(R, "AVGTS", Math.max(0, R.AVGTS + nAVGTS));
+    } else if (M.MODE === 6) {                          // PuC
+      const nS3VAL = R.S3VAL;
+      for (let r = 1; r <= STEPS; r++) {
+        if (!this.MATRIX[r].SYNAPS[pnL]) continue;
+        const Q = T1[r];
+        let nAS = Q.AVGTS * pnILF + nS3VAL;
+        let nAVGTS = 0;
+        if (pnL >= M.ISI && pnL <= M.ISI + M.USDUR) nAS = nAS + M.USFORCE;
+        if (M.IBCM === 1) {                             // iBCM rule
+          nAVGTS = nAVGTS + (M.CA - nAS) * (nAS < M.CA ? pnP : pnD);
+        } else {
+          if (M.F3_6 === 1 && nAS < M.CA) nAVGTS = nAVGTS + (M.CA - nAS) * pnP;
+          if (M.F3_7 === 1 && nAS >= M.CA) nAVGTS = nAVGTS + (M.CA - nAS) * pnD;
+        }
+        this.setS(Q, "AVGTS", Math.max(0, Q.AVGTS + nAVGTS));
+      }
+      if (pnL === 250) {
+        for (let nX = 1; nX <= STEPS; nX++) {
+          let nSynCount = 0, nSynSum = 0;
+          for (let r = 1; r <= STEPS; r++) {
+            if (!this.MATRIX[r].SYNAPS[nX]) continue;
+            nSynSum = nSynSum + Math.min(M.F3_4 === 8 ? M.CAP : 300, T1[r].AVGTS);
+            nSynCount++;
+          }
+          const nMemS4VAL = T1[nX].S4VAL;
+          this.setS(T1[nX], "S4VAL", nSynSum / Math.max(1, nSynCount));
+          if (vround(nMemS4VAL, 1) !== vround(T1[nX].S4VAL, 1)) this.plFlag = true;
+        }
+      }
+    }
+    for (let nY = 1; nY <= nTimes; nY++) {
+      const T = this.SIMCOR[nY];
+      if ([1, 2, 6].includes(M.MODE)) {
+        if (M.ILFMAX === 1) this.setS(T[pnL], "S4VAL", T[pnL].AVGTS);
+        else this.setS(T[pnL], "S4VAL", T[pnL].AVGTS * pnILF);
+      }
+      if (pnL === STEPS) {
+        this.SUBTRACT(nY);
+        if (M.MODE < 4 || nY === nTimes) this.pnIC = Math.max(1, this.pnIC + 1);
+      }
+    }
+  }
+
+  // MATRIX: for each of the 250 synapses when and how long the GrC fires (modes 3..7)
+  MAKE_MATRIX() {
+    const M = this.MEM;
+    for (let r = 1; r <= STEPS; r++) this.MATRIX[r].SYNAPS.fill(0);
+    for (let r = 1; r <= STEPS; r++) {
+      const S = this.MATRIX[r].SYNAPS;
+      const nTo = M.GFTMODE === 1 ? M.GFTRIG : M.GFTMODE === 2 ? this.rand() * M.GFTRIG + 1 : M.GFTMODE === 3 ? Math.pow(this.rand(), 2) * M.GFTRIG + 1 : 1;
+      for (let nX = 1; nX <= nTo; nX++) {
+        const g = M.GFDMODE;
+        const nGFDUR = g === 1 ? M.GFDUR : g === 2 ? this.rand() * M.GFDUR + 1 : g === 3 ? this.rand() * M.ISI + 1 : g === 4 ? this.rand() * 250 + 1 :
+          g === 5 ? Math.pow(this.rand(), 2) * M.GFDUR + 1 : g === 6 ? Math.pow(this.rand(), 2) * M.ISI + 1 : g === 7 ? Math.pow(this.rand(), 2) * 250 + 1 : M.GFDUR;
+        const len = vint(nGFDUR);
+        if (M.GFTMODE === 0) {                          // GrC firing covers all timeslices
+          for (let k = r; k < r + len && k <= STEPS; k++) S[k] = 1;
+          continue;
+        }
+        for (let nY = 1; nY <= 10; nY++) {
+          const nMoment = vint(this.rand() * (STEPS - 1)) + 1;
+          let free = true;
+          for (let k = nMoment; k < nMoment + len && k <= STEPS; k++) if (S[k]) { free = false; break; }
+          if (free) { for (let k = nMoment; k < nMoment + len && k <= STEPS; k++) S[k] = 1; break; }
+        }
+      }
+    }
+  }
+
+  NONASSOCP(nF, R) {
+    const M = this.MEM;
+    if ((nF === 1 && R.AVGTS < 1000) || (nF === 2 && R.AVGTS < M.CAP)) return Math.max(1, R.AVGTS) * M.P0 * this.pnILF / 100;
+    if (nF === 3 || (nF === 4 && R.AVGTS < M.CAP)) return M.P0 * this.pnILF;
+    return 0;
+  }
+  NONASSOCD(nF, R) {
+    const M = this.MEM;
+    if (nF === 2) return -Math.max(1, R.AVGTS) * M.D0 * this.pnILF / 100;
+    if (nF === 4) return -M.D0 * this.pnILF;
+    return 0;
+  }
+
+  // Pure random addressing in ELL mode (the right signal is also delivered to a wrong address)
+  SCATTERADDRESS_ELL(pnP, pnD, nS3VAL) {
+    const M = this.MEM, T1 = this.SIMCOR[1];
+    for (let nX = 1; nX <= M.WA; nX++) {
+      const nRec2 = vint(this.rand() * STEPS + 1);
+      const Q = T1[nRec2];
+      let nAVGTS = 0, nAS;
+      if (M.F3_5 === 4) {
+        nAS = M.ILFMAX > 1 ? Q.AVGTS * this.pcILF[nRec2] * pnP + nS3VAL : Q.AVGTS * pnP + nS3VAL;
+        if (nAS >= M.B + this.pnBShift && nAS < M.CA + this.pnBShift) nAVGTS = nAVGTS + (M.CA + this.pnBShift - nAS) * pnP;
+      }
+      if (M.F3_6 === 1) {
+        nAS = M.ILFMAX > 1 ? Q.AVGTS * this.pcILF[nRec2] * pnD + nS3VAL : Q.AVGTS * pnD + nS3VAL;
+        if (nAS >= M.B + this.pnBShift && nAS >= M.CA + this.pnBShift) nAVGTS = nAVGTS + (M.CA + this.pnBShift - nAS) * pnD;
+      }
+      this.setS(Q, "AVGTS", Math.max(0, Q.AVGTS + nAVGTS));
+    }
+  }
+
+  // Wrong addressing in basic mode
+  SCATTERADDRESS(pnP, pnD, nS3VAL) {
+    const M = this.MEM, T1 = this.SIMCOR[1], nRec = this.pnL;
+    if (M.CWA === 0) {                                  // no correlation: pure random addressing (RA)
+      for (let nX = 1; nX <= M.WA; nX++) {
+        const nRec2 = vint(this.rand() * STEPS + 1);
+        const Q = T1[nRec2];
+        if (M.ILFMAX > 1) this.setS(Q, "AVGTS", Q.AVGTS - Q.AVGTS * this.pcILF[nRec2] * pnD + nS3VAL * pnP);
+        else this.setS(Q, "AVGTS", Q.AVGTS - Q.AVGTS * pnD + nS3VAL * pnP);
+      }
+    } else if (M.CWA === 1) {                           // the same wrong addresses at every iteration
+      for (let nX = 1; nX <= M.WA; nX++) {
+        const nRecRand = this.pcWA[(nRec - 1) * M.WA + nX];
+        const s3 = T1[nRecRand].S3VAL;
+        const Q = T1[nRec];
+        this.setS(Q, "AVGTS", Q.AVGTS - Q.AVGTS * pnD + s3 * pnP);
+      }
+    }
+  }
+
+  MAKE_S1(k) {
+    const M = this.MEM, T = this.SIMCOR[k];
+    let nS = 0;
+    for (let nL = 1; nL <= STEPS; nL++) {
+      if (M.S1 === 1 || M.S1 === 4) nS = this.S1BASE(nL);
+      else if (M.S1 === 2) nS = 0;
+      else if (M.S1 === 3) nS = -this.S1BASE(nL);
+      else if (M.S1 === 5 && M.MODE === 6) nS = (nL >= M.ISI && nL <= M.ISI + M.USDUR) ? 40 : 20;
+      else if (M.S1 === 5 && M.MODE === 3) nS = (nL >= M.ISI && nL <= M.ISI + M.USDUR) ? 80 : 40;
+      this.setS(T[nL], "S1VAL", nS + M.S1LIFT + (M.AUTOLIFT === 1 ? this.pnLiftS1 : 0));
+    }
+    if (M.S1 === 4) {
+      this.pnAVG1 = this.avgField(T, "S1VAL");
+      for (let r = 1; r <= STEPS; r++) {
+        this.setS(T[r], "S1VAL", T[r].S1VAL - this.pnAVG1);
+        this.setS(T[r], "S1VAL", -T[r].S1VAL);
+        this.setS(T[r], "S1VAL", T[r].S1VAL + this.pnAVG1);
+      }
+    }
+    for (let r = 1; r <= STEPS; r++) this.setS(T[r], "S1VAL", T[r].S1VAL / this.pnDivS1);
+    this.pnAVG1 = this.MEDIAN("1");
+  }
+
+  MAKE_S2(k) {
+    const M = this.MEM, T = this.SIMCOR[k];
+    let nS = 0;
+    for (let nL = 1; nL <= STEPS; nL++) {
+      if ([1, 4, 6].includes(M.S2)) nS = this.S2BASE(nL);
+      else if (M.S2 === 2) nS = 0;                      // flat
+      else if (M.S2 === 3) nS = -this.S2BASE(nL);
+      else if (M.S2 === 5 && M.MODE === 3) nS = (nL >= M.ISI && nL <= M.ISI + M.USDUR) ? 80 : 40;
+      this.setS(T[nL], "S2VAL", nS + M.S2LIFT + (M.AUTOLIFT === 1 ? this.pnLiftS2 : 0));
+      this.pnHMem = nS;
+    }
+    if (M.S2 === 4) {
+      this.pnAVG2 = this.avgField(T, "S2VAL");
+      for (let r = 1; r <= STEPS; r++) {
+        this.setS(T[r], "S2VAL", T[r].S2VAL - this.pnAVG2);
+        this.setS(T[r], "S2VAL", -T[r].S2VAL);
+        this.setS(T[r], "S2VAL", T[r].S2VAL + this.pnAVG2);
+      }
+    }
+    for (let r = 1; r <= STEPS; r++) this.setS(T[r], "S2VAL", T[r].S2VAL / this.pnDivS2);
+    this.pnAVG2 = this.MEDIAN("2");
+  }
+
+  avgField(T, f) { let s = 0; for (let r = 1; r <= STEPS; r++) s += T[r][f]; return s / STEPS; }
+
+  // DTOR(): degrees to radians
+  S1BASE(nL) {
+    const M = this.MEM;
+    return Math.max(1, (Math.abs((nL % 10) - 5) / 40) * 50 + 2 + ((Math.sin((nL * 13 - 90) * Math.PI / 180) + 1) / 4) * 25 +
+      (M.S1JIT === 1 ? (this.rand() - .5) * 5 : 0));
+  }
+  S2BASE(nL) {
+    const M = this.MEM;
+    const a = Math.abs(this.pnHMem);
+    const w = this.WANDERINGLINE(nL);
+    const j = M.S2JIT === 1 ? (this.rand() - .5) * 10 : 0;
+    return Math.min(30, Math.max(10, a + w * (Math.abs((nL % 10) - 5) / 40) * 50 + j));
+  }
+  WANDERINGLINE(nX) {
+    const nR = this.rand();
+    this.pnR = nX % 5 === 0 ? nR : this.pnR;
+    return this.pnR - .5;
+  }
+
+  // the 125th of the 250 sorted values of SIMCOR1
+  MEDIAN(c) {
+    const f = "S" + c + "VAL", T = this.SIMCOR[1], a = [];
+    for (let r = 1; r <= STEPS; r++) a.push(T[r][f]);
+    a.sort((x, y) => x - y);
+    return a[124];
+  }
+
+  // S5 out of S3 and S4, the minima, and the fit
+  SUBTRACT(nY) {
+    const M = this.MEM, T = this.SIMCOR[nY];
+    let nFit1 = 0;
+    this.pnAVMinS1 = this.pnAVMinS4 = this.pnAVMinS2 = this.pnAVMinS5 = this.pnAVMinS3 = 99999.00;
+    this.pnAVMaxS5 = 0; this.pnMRS2 = 0;
+    for (let r = 1; r <= STEPS; r++) {
+      const R = T[r];
+      if (M.MODE === 6 && M.S2 === 6) {
+        this.setS(R, "S5VAL", R.S1VAL + R.S4VAL);
+        this.setS(R, "S6VAL", R.S2VAL + R.S4VAL);
+      } else if ([1, 3, 4].includes(M.MODE)) {
+        this.setS(R, "S5VAL", R.S3VAL - R.S4VAL);
+      } else if (M.MODE === 5) {
+        this.setS(R, "S5VAL", Math.max(0, R.S3VAL - R.S4VAL));
+      } else {                                            // in MGCs the apical and basilar output are summed
+        this.setS(R, "S5VAL", R.S3VAL + R.S4VAL);
+        this.pnAVMaxS2 = Math.max(this.pnAVMaxS2, R.S2VAL);
+        this.pnAVMaxS5 = Math.max(this.pnAVMaxS5, R.S5VAL);
+      }
+      this.pnAVMinS1 = Math.min(this.pnAVMinS1, R.S1VAL);
+      this.pnAVMinS4 = Math.min(this.pnAVMinS4, R.S4VAL);
+      this.pnAVMinS2 = Math.min(this.pnAVMinS2, R.S2VAL);
+      this.pnAVMinS5 = Math.min(this.pnAVMinS5, R.S5VAL);
+      this.pnAVMinS3 = Math.min(this.pnAVMinS3, R.S3VAL);
+    }
+    this.pnLiftM1 = this.pnAVMinS4 - this.pnAVMinS1;
+    this.pnLiftM2 = this.pnAVMinS5 - this.pnAVMinS2;
+    this.pnLiftM3 = this.pnAVMinS4 - this.pnAVMinS3;
+    this.pnLift1 = this.pnAVG4 - this.pnAVG1;
+    this.pnLift2 = this.pnAVG5 - this.pnAVG2;
+    this.pnLift3 = this.pnAVG4 - this.pnAVG3;
+    if (M.S2 === 6) this.pnLift4 = this.pnAVG6 - this.pnAVG1;
+    if (M.PEN === 1) {
+      this.pnBShift = Math.max(0, this.pnBShift + ((this.pnAVMaxS5 - this.pnAVMinS5) > 3 ? .1 : -.1));
+      this.pnMRS2 = Math.max(this.pnMRS2, this.pnAVMaxS2 - this.pnAVMinS2);
+      this.pnMRMAXS2 = Math.max(this.pnMRS2, this.pnMRMAXS2);
+      this.obj.LTC3.top = vint(this.pnTop3 - this.SP.SP5_5.value - 1 - this.pnBShift);
+      this.obj.LTCL3.top = this.obj.LTC3.top - 4;
+      this.obj.LTB3.top = vint(this.pnTop3 - this.SP.SP5_6.value - 1 - this.pnBShift);
+      this.obj.LTBL3.top = this.obj.LTB3.top - 4;
+    }
+    this.pnAVG3 = this.MEDIAN("3");
+    this.pnAVG4 = this.MEDIAN("4");
+    this.pnAVG5 = this.MEDIAN("5");
+    if (M.S2 === 6) this.pnAVG6 = this.MEDIAN("6");
+    let nfS2VAL = 0, nfS5VAL = 0;
+    for (let nL = 1; nL <= STEPS - 1; nL++) {
+      const R = T[nL];
+      if (nL > 1) {
+        nFit1 = nFit1 + Math.pow((nfS2VAL - R.S2VAL) - (nfS5VAL - R.S5VAL), 2);
+        if (M.AUTOLIFT === 1 && M.VARIANT >= 10 && R.S5VAL < M.VARIANT) {   // no output at all of the MGC
+          this.pnLiftS1 = this.pnLiftS1 + .001;
+          this.pnLiftS2 = this.pnLiftS2 + .001;
+        }
+      }
+      nfS2VAL = R.S2VAL;
+      nfS5VAL = R.S5VAL;
+    }
+    const nIC = this.pnIC % 250;
+    if ([3, 4, 5].includes(M.MODE)) {
+      if (this.plEBR && !this.plFlag) this.pnIC = this.pnCycles - 1;
+      this.obj.FIT1.caption = "Iterations : " + vstr(this.pnIC + 1, 4);
+    } else {
+      this.obj.FIT1.caption = "Iterations : " + vstr(this.pnIC + 1, 4) +
+        (M.DISPLAY.indexOf("f") < 0 ? "      " + "Fit S2-S5 : " + ltrim(vstr(nFit1, 6, 2)) : "");
+    }
+    if (nIC >= 2 && nIC <= STEPS - 1) {
+      if (nFit1 < 10000000000) this.setS(T[nIC + 1], "LFITH25", nFit1);
+    }
+    return nFit1;
+  }
+
+  // ======================================================================================================
+  // Execution (CB6_x, ALLCYCLES, ONECYCLE, ONESTEP), as generator: yields after every iteration
+  // ({drawn: true} when the screen was redrawn), so that a caller can pace and interrupt it.
+  // ======================================================================================================
+  GETPDVALUES() {
+    if (this.pnIC > 0) return;
+    const M = this.MEM;
+    this.pnD = M.D / 100;
+    this.pnP = M.P / 100;
+    this.pcILF = [0];
+    for (let nX = 1; nX <= STEPS; nX++) this.pcILF.push(vint(this.rand() * (M.ILFMAX - 1) * 10 + 10));
+    this.pcGFDUR = [0];
+    for (let nX = 1; nX <= STEPS; nX++) this.pcGFDUR.push(vint(this.rand() * (M.GFDUR - 1) + 1));
+    this.rand();                                          // RAND(-1)
+    this.pcWA = [0];
+    for (let nL = 1; nL <= STEPS; nL++) for (let nX = 1; nX <= M.WA; nX++) this.pcWA.push(vint(this.rand() * STEPS + 1));
+  }
+
+  ONESTEP() {
+    this.STEP();
+    if (this.pnL === STEPS) this.pnL = 0;
+  }
+
+  // returns true when the lines were redrawn
+  ONECYCLE() {
+    do { this.ONESTEP(); } while (!(this.pnL === 0 || this.plBreak));
+    if (this.pnSpeed === 2 && (this.pnIC === 1 || this.pnIC / 10 === vint(this.pnIC / 10) || this.pnIC < this.MEM.SLOW)) {
+      this.DRAWALLLINES();
+      return true;
+    }
+    return false;
+  }
+
+  *ALLCYCLES() {
+    this.plEBR = false;
+    const DLW = Math.max(1, this.MEM.DLW);
+    for (let nX = this.pnIC + 1; nX <= this.pnCycles; nX += DLW) {
+      this.plFlag = false;
+      const drawn = this.ONECYCLE();
+      if (nX === 1) this.LBPCAPTION();
+      yield { drawn: drawn, slow: drawn && this.pnIC < this.MEM.SLOW };
+      if (this.plBreak) break;
+      if (nX === this.MEM.STOP || (this.plEBR && !this.plFlag && nX > 5)) break;
+    }
+    if (!this.plQuit) {
+      this.plBreak = false;
+      this.DRAWALLLINES();
+      this.LBPCAPTION();
+      yield { drawn: true, end: true };
+    }
+  }
+
+  *CB6_4() {                                            // execute 250 loops (drawing every 10 loops)
+    this.plBreak = false;
+    for (let r = 1; r <= STEPS; r++) this.SIMCOR[1][r].LFITH25 = 0;
+    for (let i = 1; i <= STEPS; i++) this.L.LFIT25[i].height = 0;
+    this.pnCycles = this.pnCycles + STEPS;
+    this.GETPDVALUES();
+    this.pnSpeed = 2;
+    yield* this.ALLCYCLES();
+    this.plPause = false;
+  }
+
+  *CB6_5() {                                            // execute 250 loops (drawing at the end only)
+    for (let r = 1; r <= STEPS; r++) this.SIMCOR[1][r].LFITH25 = 0;
+    for (let i = 1; i <= STEPS; i++) this.L.LFIT25[i].height = 0;
+    this.pnCycles = this.pnCycles + STEPS;
+    this.GETPDVALUES();
+    this.pnSpeed = 3;
+    yield* this.ALLCYCLES();
+    this.DRAWALLLINES();
+    if (this.plBox) {
+      const T = this.SIMCOR[1];
+      const mn = f => { let m = Infinity; for (let r = 1; r <= STEPS; r++) m = Math.min(m, T[r][f]); return m; };
+      this.boxes = [
+        [LEFT1, this.pnTop1, LEFT1 + STEPS + 1, this.pnTop1 - mn("S1VAL")],
+        [LEFT1, this.pnTop2, LEFT1 + STEPS + 1, this.pnTop2 - mn("S2VAL")],
+        [LEFT1, this.pnTop3, LEFT1 + STEPS + 1, this.pnTop3 - mn("S3VAL")],
+        [LEFT2, this.pnTop1, LEFT2 + STEPS + 1, this.pnTop1 - mn("S4VAL")]];
+      this.plBox = false;
+    }
+    yield { drawn: true, end: true };
+  }
+
+  *CB6_3() {                                            // one loop, fast
+    this.plBreak = false;
+    this.GETPDVALUES();
+    this.pnSpeed = 2;
+    const drawn = this.ONECYCLE();
+    yield { drawn: drawn, end: true };
+  }
+
+  // PROCEDURE EXECUTE (called from DEMO, plCMD = .F.)
+  *EXECUTE() {
+    const nTimes = Math.max(1, this.MEM.TIMES);
+    const n = vval(this.cmd);
+    if (n === 4) {
+      yield* this.CB6_3();
+    } else if (n === 25) {
+      yield* this.CB6_5();
+    } else if (n > 4) {
+      for (let nX = 1; nX <= nTimes; nX++) {
+        if (nTimes < 3) yield* this.CB6_4();
+        else yield* this.CB6_5();
+        if (this.plQuit) return;
+      }
+    }
+  }
+
+  // ======================================================================================================
+  // Drawing: positions of the line objects (the screen itself is painted by the page)
+  // ======================================================================================================
+  DRAWALLLINES() {
+    const M = this.MEM, T1 = this.SIMCOR[1], O = this.obj;
+    this.pnMaxFit = O.FIT1.top - O.LBS5.top - O.LBS5.height - 5;
+    let mx = 0;
+    for (let r = 1; r <= STEPS; r++) mx = Math.max(mx, T1[r].LFITH25);
+    this.pnMaxLFITH = mx;
+    this.pnDivMax = vint(this.pnMaxLFITH / this.pnMaxFit) + 1;
+    let nMax4 = 0, nMax5 = 0;
+    const DLW = Math.max(1, M.DLW);
+    for (let nL = 1; nL <= STEPS; nL += DLW) {
+      this.DRAWALLLINESOF1STEP(nL);
+      if (this.pnIC === this.pnCycles || this.plScreenShow) {
+        nMax4 = Math.max(nMax4, this.L.L4[nL].height);
+        nMax5 = Math.max(nMax5, this.L.L5[nL].height);
+      }
+    }
+    if ((this.pnIC === this.pnCycles || this.plScreenShow) && M.MODE < 3) {
+      const nLim4 = [3, 4].includes(M.MODE) ? this.pnTop4 - 2 : 90;
+      if (nMax4 > nLim4) {
+        for (let nL = 1; nL <= STEPS; nL++) {
+          const l = this.L.L4[nL];
+          l.height = vint(Math.max(0, l.height - (nMax4 - nLim4) - 10));
+          l.top = vint(this.pnTop4 - l.height - 10);
+          this.L.LR14[nL].top = vint(this.L.LR14[nL].top + (nMax4 - nLim4));
+        }
+      }
+      O.LB01.visible = nMax4 > nLim4;
+      O.LB011.visible = nMax4 > nLim4;
+      const nLim5 = [3, 4].includes(M.MODE) ? 180 : 80;
+      if (nMax5 > nLim5) {
+        for (let nL = 1; nL <= STEPS; nL++) {
+          const l = this.L.L5[nL];
+          l.height = vint(Math.max(0, l.height - (nMax5 - nLim5) - 10));
+          l.top = vint(this.pnTop5 - l.height - 10);
+          this.L.LR25[nL].top = vint(this.L.LR25[nL].top + (nMax5 - nLim5));
+        }
+      }
+      O.LB02.visible = nMax5 > nLim5;
+      O.LB022.visible = nMax5 > nLim5;
+    }
+    const LBS = this.LBS;
+    for (let nX = 1; nX <= 5; nX++) {
+      const o = O["LBS" + nX];
+      o.top = vint(LBS[8][nX] + LBS[9][nX]);
+      if ((nX === 1 || nX === 2) && this.SP["SP" + nX + "_1"].value === 3 && this.SP["SP" + nX + "_3"].value === 0) {
+        o.top = vint(LBS[8][nX] - o.height - 5);
+      }
+      if (nX === 3) o.top = vint(LBS[8][3] + Math.max(M.S1 === 3 ? 0 : LBS[9][1], LBS[9][3]));
+      if (nX > 1) LBS[9][nX] = 0;
+    }
+    this.LBPCAPTION();
+  }
+
+  DRAWALLLINESOF1STEP(nL) {
+    const M = this.MEM, R = this.SIMCOR[1][nL];
+    this.pnF = 1;
+    if (this.pnIC > 0) {
+      this.DRAWSPECIFICLINE(this.pnTop2, R.S2VAL, "2", nL, C.CYAAN);
+      this.DRAWSPECIFICLINE(this.pnTop3, R.S3VAL, "3", nL, C.CYAAN);
+      this.DRAWSPECIFICLINE(M.S2 === 6 ? this.pnTop6 : this.pnTop4, R.S4VAL, "4", nL, C.LICHTROOD);
+      this.DRAWSPECIFICLINE(this.pnTop5, R.S5VAL - (M.MODE === 1 ? this.pnLiftM2 : 0), "5", nL, C.CYAAN);
+      if (this.pnIC === 1 || this.pnIC === this.pnCycles || M.S1JIT === 1 || M.AUTOLIFT === 1 || this.plScreenShow) {
+        this.DRAWSPECIFICLINE(this.pnTop1, R.S1VAL, "1", nL, C.LICHTROOD);
+        if (Math.sign(R.S1VAL) === Math.sign(R.S2VAL) || Math.sign(R.S2VAL) === 0) {
+          this.DRAWSPECIFICLINE(this.pnTop3, R.S1VAL, "6", nL, C.LICHTROOD);
+        }
+      }
+      if (M.S2 === 6) {
+        this.DRAWSPECIFICLINE(this.pnTop4, R.S6VAL, "7", nL, C.LICHTROOD);
+        this.DRAWSPECIFICLINE(this.pnTop4 - (this.AP(R, "1", "6") - this.pnLift4), 2, "R36", nL, C.CYAAN);
+        this.DRAWSPECIFICLINE(this.pnTop1 - (this.AP(R, "6", "1") + this.pnLift4), 2, "R63", nL, C.CYAAN);
+      }
+      if (![3, 7].includes(M.MODE)) {
+        if (M.MODE === 1) {
+          this.DRAWSPECIFICLINE(this.pnTop4 - (R.S1VAL + this.pnLiftM1), 2, "R14", nL, C.CYAAN);   // projection of 1 on 4
+          this.DRAWSPECIFICLINE(this.pnTop1 - (R.S4VAL - this.pnLiftM1), 2, "R41", nL, C.CYAAN);   // projection of 4 on 1
+        } else {
+          this.DRAWSPECIFICLINE(this.pnTop3 + (-R.S3VAL - R.S4VAL), 2, "8", nL, C.GEEL);
+          if (M.S2 === 6) {
+            this.DRAWSPECIFICLINE(this.pnTop6 - (this.AP(R, "3", "4") - this.pnLift3), 2, "R14", nL, C.CYAAN);
+            this.DRAWSPECIFICLINE(this.pnTop3 - (this.AP(R, "4", "3") + this.pnLift3), 2, "R41", nL, C.ROOD);
+          } else {
+            this.DRAWSPECIFICLINE(this.pnTop4 - (this.AP(R, "1", "4") - this.pnLiftM1), 2, "R14", nL, C.CYAAN);
+            this.DRAWSPECIFICLINE(this.pnTop1 - (this.AP(R, "4", "1") + this.pnLiftM1), 2, "R41", nL, C.CYAAN);
+          }
+        }
+        if (M.S2 === 6) {
+          this.DRAWSPECIFICLINE(this.pnTop5 - (this.AP(R, "2", "5") - this.pnLift2), 2, "R25", nL, C.ROOD);
+          this.DRAWSPECIFICLINE(this.pnTop2 - (this.AP(R, "5", "2") + this.pnLift2), 2, "R52", nL, C.ROOD);
+        } else {
+          this.DRAWSPECIFICLINE(this.pnTop5 - (R.S2VAL + ([2, 6].includes(M.MODE) ? this.pnLiftM2 : 0)), 2, "R25", nL, C.ROOD);
+          this.DRAWSPECIFICLINE(this.pnTop2 - (R.S5VAL - this.pnLiftM2), 2, "R52", nL, C.ROOD);
+        }
+      }
+      if (M.DISPLAY.indexOf("f") < 0) {
+        if ([1, 2, 6].includes(M.MODE) && nL > 1) {
+          const nT = this.obj.LBP.top + this.obj.LBP.height - 15;
+          this.DRAWSPECIFICLINE(nT, R.LFITH25 / this.pnDivMax, "FIT25", nL, C.GEEL);
+        }
+      }
+    }
+  }
+
+  AP(R, c1, c2) {                                       // mirror of S<c1> around the median of S<c2>
+    let nVal = R["S" + c1 + "VAL"];
+    nVal = nVal - this["pnAVG" + c2];
+    nVal = -nVal;
+    nVal = nVal + this["pnAVG" + c2];
+    return nVal;
+  }
+
+  DRAWSPECIFICLINE(nTop, nSVAL, cT, nL, nColor) {
+    nSVAL = this.pnF * nSVAL;
+    const l = this.L["L" + cT][nL];
+    l.color = nColor;
+    if (nSVAL >= 0) {
+      l.height = vint(nSVAL);
+      l.top = vint(nTop - nSVAL);
+    } else {
+      l.top = vint(nTop - 1);
+      l.height = vint(-nSVAL);
+    }
+    const nT = vval(cT.replace(/R/g, ""));
+    if (nT >= 1 && nT <= 5) this.LBS[9][nT] = Math.max(this.LBS[9][nT], -Math.min(0, nSVAL));
+  }
+
+  // ======================================================================================================
+  // DEMO, MEM and the dashboard
+  // ======================================================================================================
+  DEMO(nDemo) {
+    this.cmd = String(nDemo);
+    const M = this.MEM;
+    // default values
+    this.setMem("TIMES", 0); this.setMem("AUTOLIFT", 0); this.setMem("PEN", 0); this.setMem("VARIANT", 0);
+    this.setMem("S1JIT", 0); this.setMem("S2JIT", 0); this.setMem("S1LIFT", 0); this.setMem("S2LIFT", 0);
+    this.setMem("WA", 0); this.setMem("CWA", 0); this.setMem("ILFMAX", 1);
+    this.setMem("ISI", 0); this.setMem("USDUR", 0); this.setMem("USFORCE", 0); this.setMem("GFDUR", 1); this.setMem("GFDMODE", 1);
+    this.setMem("GFTRIG", 1); this.setMem("GFTMODE", 0);
+    this.setMem("DLW", 1); this.setMem("STOP", 0); this.setMem("CAP", 1000); this.setMem("SLOW", 0); this.setMem("IBCM", 0);
+    this.setMem("DISPLAY", "12345000LF");
+    this.setMem("F3_4", 0); this.setMem("F3_5", 0); this.setMem("F3_6", 0); this.setMem("F3_7", 0); this.setMem("S1", 1); this.setMem("S2", 1);
+    this.plBox = false;
+    if (nDemo === 25) {                                 // boxes added: DEMO executes CB6_5 itself and returns
+      this.plBox = true;
+      this.MEMLIST(DEMOS[25]);
+      return;
+    }
+    if (DEMOS[nDemo]) this.MEMLIST(DEMOS[nDemo]);
+    this.SP.SP5_3.value = nDemo;
+    this.DASHBOARDCOHERENCE();
+    void M;
+  }
+
+  // PROCEDURE MEM(cList): field=value list -> MEM.DBF and dashboard
+  MEMLIST(cList) {
+    this.DASHBOARDCOHERENCE();
+    const items = cList.split(",").filter(s => s !== "");
+    for (const it of items) {
+      const p = it.indexOf("=");
+      if (p <= 0) break;
+      const cName = it.slice(0, p), cValue = it.slice(p + 1);
+      // VAL with "." and with "," as decimal point; the largest is taken
+      const nValue = Math.max(vval(cValue), vval(cValue.replace(/\./g, ",")));
+      const idx = PCFIELDS.indexOf(cName);
+      const cObj = idx >= 0 && idx < PCOBJECTS.length ? PCOBJECTS[idx] : "";
+      if (cObj.startsWith("SP")) { this.SP[cObj].value = nValue; this.DISPLAYONCB(cObj); }
+      else if (cObj.startsWith("OP")) this.OP[cObj] = nValue;
+      else if (cObj.startsWith("TX")) this.TX[cObj] = cValue.replace(/'/g, "");
+      if (MEMDEC[cName] === null) this.setMem(cName, cValue.replace(/'/g, ""));
+      else this.setMem(cName, nValue);
+    }
+    this.MEMGET();
+    this.DASHBOARDCOHERENCE();
+    this.LBPCAPTION();
+  }
+
+  MEMGET() {
+    for (let i = 0; i < PCOBJECTS.length; i++) {
+      const o = PCOBJECTS[i], f = PCFIELDS[i];
+      const nV = this.MEM[f];
+      if (o.startsWith("SP")) {
+        const sp = this.SP[o];
+        if (nV >= sp.low && nV <= sp.high) sp.value = nV;
+        else { sp.value = Math.abs(sp.low); this.setMem(f, sp.value); }
+        this.DISPLAYONCB(o);
+      } else if (o.startsWith("OP")) this.OP[o] = nV;
+      else this.TX[o] = nV;
+    }
+  }
+
+  DASHBOARDCOHERENCE() {
+    const m = this.SP.SP5_1.value;
+    const lC1 = m === 1, lC2 = m === 2, lC3 = [3, 4, 5, 6, 7].includes(m);
+    const E = this.EN;
+    E.CB2_4 = lC3; E.CB2_5 = lC3; E.CB2_6 = lC3; E.OP2_7 = lC2; E.CB3_1 = lC1;
+    E.CB3_4 = !lC1; E.CB3_5 = lC3; E.CB3_6 = !lC1; E.CB3_7 = !lC1; E.CB3_8 = !lC1; E.CB3_9 = !lC1;
+    E.CB4_3 = !lC1; E.CB4_4 = !lC1; E.CB4_7 = lC3; E.CB4_8 = lC3 && this.SP.SP2_5.value > 0; E.CB4_9 = lC3;
+    E.CB5_9 = lC3 && this.SP.SP2_5.value > 0; E.OP5_4 = lC2; E.CB5_6 = lC2; E.CB5_7 = lC2;
+    this.PNTOP();
+    this.LBSIGNALTEXT();
+    return "";
+  }
+
+  PNTOP() {
+    this.pnTop1 = 1 * HI; this.pnTop2 = 2 * HI; this.pnTop3 = 3 * HI;
+    if (this.SP && this.SP.SP5_3.value === 51) this.pnTop3 = 3 * HI + 30;
+    this.pnTop4 = 1 * HI; this.pnTop5 = 2 * HI; this.pnTop6 = 3 * HI; this.pnTop7 = 4 * HI; this.pnTop8 = 5 * HI;
+    if (this.obj) {
+      this.obj.LB01.top = this.pnTop4 - 5; this.obj.LB011.top = this.pnTop4 - 10;
+      this.obj.LB02.top = this.pnTop5 - 5; this.obj.LB022.top = this.pnTop5 - 10;
+    }
+  }
+
+  LBSIGNALTEXT() {
+    const M = this.MEM, LBS = this.LBS, O = this.obj;
+    LBS[1][1] = "S1 : Same signal repeated for every iteration\rModulation of S4 projected over S1";
+    LBS[1][2] = "S2 : Random signal different for every iteration\rModulation of S5 projected over S2";
+    LBS[1][3] = "S3 : The sum of S1 and S2, will serve as input\r250 timeslices";
+    LBS[1][4] = "S4 : Time-correlated component filtered out of S3\rModulation of S1 projected over S4";
+    LBS[1][5] = "S5 : Time-uncorrelated component (S3-S4+constant)\rModulation of S2 projected over S5";
+    const cC1a = M.S1 === 2 ? "flat" : M.S1 === 3 ? "inverted CC of the DS (iCC)" : M.S1 === 4 ? "antiphased CC of the DS (iCC)" : "CC of the DS";
+    const cC1b = M.S1 === 2 ? "flat" : M.S1 > 2 ? "iCC" : "CC";
+    const cC2a = M.S2 === 2 ? "flat" : M.S2 === 3 ? "inverted UC of the DS (iUC)" : M.S2 === 4 ? "antiphased UC of the DS (iUC)" : "UC of the DS";
+    const cC2b = M.S2 === 2 ? "flat" : M.S2 > 2 ? "iUC" : "UC";
+    const nLift1 = M.VARIANT >= 10 ? vround(this.pnLiftS1, 0) + M.S1LIFT : M.S1LIFT;
+    const nLift2 = M.VARIANT >= 10 ? vround(this.pnLiftS2, 0) + M.S2LIFT : M.S2LIFT;
+    const lift = n => n === 0 ? "" : " + excitatory lift of " + ltrim(vstr(n));
+    LBS[2][1] = "S1 : " + cC1a + lift(nLift1);
+    LBS[2][2] = "S2 : " + cC2a + lift(nLift2);
+    // ICASE(cC1b="flat",...): "=" compares with SET EXACT OFF (left part)
+    const cC3 = cC1b.startsWith("flat") ? cC2b : cC2b.startsWith("flat") ? cC1b : (cC1b + cC2b).indexOf("i") >= 0 ? "iDS" : "DS";
+    let cC1ib = ("i" + cC1b).split("ii").join("");
+    cC1ib = cC1ib.split("iflat").join("flat");
+    LBS[2][3] = ("S3 : " + cC1b + " + " + cC2b + " = " + cC3 + "\rSummed basilar output" + lift(nLift1 + nLift2)).split("flat + flat = ").join("");
+    LBS[2][4] = "S4 : SUM(ApO) evolving to " + cC1ib;
+    LBS[2][5] = ("S5 : SUM(ApO) + " + cC3 + " evolving to " + cC2b + "\r(" + cC1ib + " + " + cC3 + " = " + cC2b + " when successful)" +
+      (!cC2b.startsWith("flat") ? "\rSUM(ApO) annulling the " + cC1b + " in the " + cC3 : "")).split("\r(flat + flat = flat)").join("");
+    LBS[6][1] = "S1 : " + cC1a + lift(nLift1);
+    LBS[6][2] = "S2 : " + cC2a + lift(nLift2);
+    LBS[6][3] = ("S3 : " + cC1b + " + " + cC2b + " = " + cC3 + "\rCC + UC = DS (AF input)" + lift(nLift1 + nLift2)).split("flat + flat = ").join("");
+    LBS[6][4] = "S4 : ILF*aSS evolving to " + cC1ib;
+    LBS[6][5] = ("S5 : ILF*aSS + " + cC3 + " evolving to " + cC2b + "\r(" + cC1ib + " + " + cC3 + " = " + cC2b + " when successful)" +
+      (!cC2b.startsWith("flat") ? "\rILF*aSS annulling the " + cC1b + " in the " + cC3 : "")).split("\r(flat + flat = flat)").join("");
+    if (M.S1 === 5) {
+      LBS[6][1] = "S1 : DS = CS signal with added US surge";
+      LBS[6][2] = "S2 : " + cC2a + lift(nLift2);
+      LBS[6][3] = "S3 = S1";
+      LBS[6][4] = "S4 : negative image of the DS when successful";
+      LBS[6][5] = "S5 : PuC activity profile when successful";
+    }
+    LBS[3][3] = "(S3) CS-Tone signal + US signal"; LBS[3][6] = "(S4) SUM(ApO) / PuC activity";
+    LBS[4][1] = "(S3) CS-tone signal"; LBS[4][2] = "(S3) CS-light signal"; LBS[4][4] = "(S4) PuC reaction on CS-tone";
+    LBS[4][8] = "(S4) PuC reaction on CS-light";
+    LBS[7][1] = "S1"; LBS[7][2] = "S2"; LBS[7][3] = "S1 + S2"; LBS[7][4] = "-S1 = S2 - (S1 + S2) , delivered by the PuC as S1";
+    LBS[7][5] = "-S2 = S1 - (S1 + S2) , delivered by the PuC as S2"; LBS[7][6] = "- (S1 + S2)";
+    const mode = this.SP.SP5_1.value;
+    const lines = s => (s.match(/\r/g) || []).length + 1;
+    for (let nX = 1; nX <= 8; nX++) {
+      const o = O["LBS" + nX];
+      o.caption = LBS[mode] ? LBS[mode][nX] || "" : "";
+      o.height = 12 * lines(o.caption);
+    }
+    if (M.S2 === 6) for (let nX = 1; nX <= 6; nX++) { const o = O["LBS" + nX]; o.caption = LBS[7][nX]; o.height = 12 * lines(o.caption); }
+    for (let nX = 1; nX <= 8; nX++) { LBS[8][nX] = this["pnTop" + nX] + 2; O["LBS" + nX].top = LBS[8][nX]; LBS[9][nX] = 0; }
+    const lC2 = [2, 6].includes(mode);
+    for (const n of ["LTC3", "LTCL3", "LTB3", "LTBL3", "LTN3", "LTNL3", "LTC5", "LTCL5", "LTA1", "LTA2", "LTA3", "LTA4", "LTA5", "LTA6", "LTA7", "LTA8", "S5HALT"]) O[n].top = -10;
+    for (let nX = 1; nX <= 8; nX++) {
+      const nY = this["pnTop" + nX];
+      if (nX === 3 || nX === 5) {
+        O["LTC" + nX].top = lC2 ? nY - this.SP.SP5_5.value - 1 : -10;
+        O["LTCL" + nX].top = lC2 ? nY - this.SP.SP5_5.value - 5 : -10;
+        O["LTCL" + nX].caption = "Ca";
+        O["LTCL" + nX].visible = this.SP.SP5_5.value > 0;
+        if (nX === 5) O.LTCL5.left = LEFT2 - 27;
+      }
+      if (nX === 3 && mode === 2) {
+        O.LTB3.top = lC2 ? nY - this.SP.SP5_6.value - 1 : -10;
+        O.LTBL3.top = lC2 ? nY - this.SP.SP5_6.value - 5 : -10;
+        O.LTBL3.caption = "B";
+        O.LTN3.top = lC2 ? nY - this.SP.SP5_7.value - 1 : -10;
+        O.LTNL3.top = lC2 ? nY - this.SP.SP5_7.value - 5 : -10;
+        O.LTNL3.caption = "N";
+      }
+      O["LTA" + nX].top = nY - 1;
+    }
+    this.pnMaxFit = O.FIT1.top - O.LBS5.top - O.LBS5.height - 5;
+    for (let nX = 1; nX <= STEPS; nX++) this.L.L6[nX].left = [1, 2, 6].includes(M.MODE) ? nX + LEFT1 : nX + LEFT2;
+    // visibility
+    for (let nX = 1; nX <= 8; nX++) { O["LBS" + nX].visible = false; O["LTA" + nX].visible = false; }
+    O.S5HALT.visible = false;
+    if (M.S2 === 6) {
+      for (let nX = 1; nX <= 6; nX++) { O["LBS" + nX].visible = true; O["LTA" + nX].visible = true; }
+    } else {
+      for (let nX = 1; nX <= 8; nX++) {
+        if ([1, 2, 6, 7].includes(M.MODE) && [6, 7, 8].includes(nX)) continue;
+        if (M.MODE === 3 && [1, 2, 3, 4, 5, 7, 8].includes(nX)) continue;
+        if (M.MODE === 4 && [3, 6, 7, 8].includes(nX)) continue;
+        if (M.MODE === 5) continue;                       // (EBR depiction: not translated)
+        O["LBS" + nX].visible = true; O["LTA" + nX].visible = true;
+      }
+    }
+    if (M.AUTOLIFT === 1) { O.S5HALT.visible = true; O.S5HALT.top = this.pnTop2 - M.VARIANT; }
+  }
+
+  // DISPLAYONCB: caption of the dashboard button next to a spinner
+  DISPLAYONCB(name) {
+    const nL = +name[2], nT = +name[4], SP = this.SP, CB = this.CB;
+    const v = n => SP[n].value;
+    if (nL === 1) {
+      if (nT === 1) { const nV = v("SP1_1"); CB.CB1_1 = "S1 " + (nV === 1 ? "modulated" : nV === 2 ? "flat" : nV === 3 ? "inverted" : nV === 4 ? "antiphased" : nV === 5 ? "with US surge at " + ltrim(vstr(v("SP2_4"))) : ""); }
+      else if (nT === 3) CB.CB1_3 = "Lift S1 = " + ltrim(vstr(v("SP1_3")));
+      else if (nT === 8) CB.CB1_8 = v("SP1_8") === -1 ? "Start with S4 = S3" : "Start with S4 = " + ltrim(vstr(v("SP1_8")));
+    } else if (nL === 2) {
+      if (nT === 1) { const nV = v("SP2_1"); CB.CB2_1 = "S2 " + (nV === 1 ? "modulated" : nV === 2 ? "flat" : nV === 3 ? "inverted" : nV === 4 ? "antiphased" : nV === 5 ? "predefined for virtual US" : nV === 6 ? "modulated but unchanging" : ""); }
+      else if (nT === 3) CB.CB2_3 = "Lift S2 = " + ltrim(vstr(v("SP2_3")));
+      else if (nT === 4) {
+        CB.CB2_4 = "US at timeslice " + ltrim(vstr(v("SP2_4")));
+        CB.CB2_5 = "US duration = " + ltrim(vstr(v("SP2_5")));
+        CB.CB2_6 = "US-CF force excess = " + ltrim(vstr(v("SP2_6")));
+      } else if (nT === 8) { const nV = v("SP2_8"); CB.CB2_8 = nV === 0 ? "ILF=2 when ic<=125, ILF=1 when ic>125" : "Input load factor maximum = " + ltrim(vstr(nV)); }
+    } else if (nL === 3) {
+      let nV = v("SP3_1");
+      CB.CB3_1 = nV === 1 ? "SUM and AVG" : nV === 2 ? "AVG derived" : nV === 3 ? "P and D in parallel and as set" : "";
+      nV = v("SP3_4");
+      const cnaP = ltrim(vstr(v("SP4_3"), 6, 3));
+      const nCap = v("SP3_9");
+      const cCap = nCap >= 0 ? "capped at " + ltrim(vstr(nCap)) : "capped at " + ltrim(vstr(-nCap * 2)) + "\rPuC-capped at " + ltrim(vstr(-nCap));
+      let cV = ["NO na-P", "na-P = " + cnaP + "%\rnon capped", "na-P = " + cnaP + "%\r" + cCap, "na-P = " + cnaP + " constant\rnon capped",
+        "na-P = " + cnaP + " constant\r" + cCap, "neg-BSa-P = " + cnaP + "%\rnon capped", "neg-BSa-P = " + cnaP + "%\r" + cCap,
+        "neg-BSa-P = " + cnaP + " constant\rnon capped", "neg-BSa-P = " + cnaP + " constant\r" + cCap][nV];
+      if (cV === undefined) cV = this._cV || "";
+      this._cV = cV;
+      CB.CB3_4 = v("SP5_1") >= 3 ? cV.split("BS").join("CF") : cV;
+      nV = v("SP3_5");
+      const cnaD = ltrim(vstr(v("SP4_4"), 5, 2));
+      const dv = { 0: "NO na-D", 2: "na-D = " + cnaD + "%", 4: "na-D = " + cnaD + " constant", 6: "neg-BSa-D = " + cnaD + "%", 8: "neg-BSa-D = " + cnaD + " constant" }[nV];
+      if (dv !== undefined) cV = dv;
+      this._cV = cV;
+      CB.CB3_5 = v("SP5_1") >= 3 ? cV.split("BS").join("CF") : cV;
+      const cP = ltrim(vstr(v("SP4_1"), 5, 1));
+      const cD = ltrim(vstr(v("SP4_2"), 5, 1));
+      nV = v("SP3_8");
+      if (nV === 0) cV = "NO iBCM rule"; else if (nV === 1) cV = "WITH iBCM rule";
+      CB.CB3_8 = cV;
+      if (nV === 1) { SP.SP3_6.value = 2; SP.SP3_7.value = 2; }
+      nV = v("SP3_6");
+      if (nV === 0) cV = "NO BSa-P"; else if (nV === 1) cV = "BSa-P = " + cP + "%"; else if (nV === 2) cV = "BSa-P = " + cP + "%\riBCM rule\rBSa-D = " + cD + "%";
+      CB.CB3_6 = v("SP5_1") >= 3 ? cV.split("BS").join("CF") : cV;
+      nV = v("SP3_7");
+      if (nV === 0) cV = "NO BSa-D"; else if (nV === 1) cV = "BSa-D = " + cD + "%"; else if (nV === 2) cV = "BSa-P = " + cP + "%\riBCM rule\rBSa-D = " + cD + "%";
+      CB.CB3_7 = v("SP5_1") >= 3 ? cV.split("BS").join("CF") : cV;
+      this._cV = cV;
+    } else if (nL === 4) {
+      CB.CB4_1 = "P% = " + ltrim(vstr(v("SP4_1"), 4, 1));
+      this.DISPLAYONCB("SP3_5");
+      CB.CB4_2 = "D% = " + ltrim(vstr(v("SP4_2"), 4, 1));
+      this.DISPLAYONCB("SP3_6");
+      CB.CB4_3 = "na-P = " + ltrim(vstr(v("SP4_3"), 6, 3));
+      this.DISPLAYONCB("SP3_4");
+      CB.CB4_4 = "na-D = " + ltrim(vstr(v("SP4_4"), 5, 2));
+      this.DISPLAYONCB("SP3_4");
+      const nCap = v("SP3_9");
+      CB.CB3_9 = nCap >= 0 ? "Synaps capping at " + ltrim(vstr(nCap)) : "PuC capping at " + ltrim(vstr(-nCap));
+      this.DISPLAYONCB("SP3_4");
+      CB.CB4_6 = ltrim(vstr(v("SP4_6"))) + " wrong addressings";
+      const cV = ltrim(vstr(v("SP4_7")));
+      CB.CB4_7 = "GFD = " + cV;
+      const nV = v("SP4_8");
+      CB.CB4_8 = "GrC burst duration =\r" + ({ 1: cV, 2: "RAND(1-" + cV + ")", 3: "RAND(1-ISI)", 4: "RAND(1-250)", 5: "RAND^2(1-" + cV + ")", 6: "RAND^2(1-ISI)", 7: "RAND^2(1-250)" }[nV] || "") + " timeslices";
+      CB.CB4_9 = "GFT = " + ltrim(vstr(v("SP4_9")));
+    } else if (nL === 5) {
+      if (nT === 1) {
+        const nV = v("SP5_1");
+        CB.CB5_1 = { 1: "Basic simulation", 2: "ELL simulation\r(MGC)", 3: "EBR simulation", 4: "EBR simulation 2", 5: "EBR simulation 3", 6: "PuC simulation", 7: "EBR-PUC" }[nV] || "";
+        this.DISPLAYONCB("SP3_5");
+        this.DISPLAYONCB("SP3_6");
+      } else if (nT === 2) { const nV = v("SP5_2"); CB.CB5_2 = nV >= 10 ? "No lift increment when S5 > " + ltrim(vstr(nV)) : "Variant " + ltrim(vstr(nV)); }
+      else if (nT === 3) CB.CB5_3 = "Load values of demo " + ltrim(vstr(v("SP5_3")));
+      else if (nT === 5) CB.CB5_5 = "Ca-threshold\r= " + ltrim(vstr(v("SP5_5")));
+      else if (nT === 6) CB.CB5_6 = "B-threshold\r= " + ltrim(vstr(v("SP5_6")));
+      else if (nT === 7) CB.CB5_7 = "N-threshold\r= " + ltrim(vstr(v("SP5_7")));
+      else if (nT === 8) CB.CB5_8 = "Value Set " + ltrim(vstr(v("SP5_8")));
+      else if (nT === 9) {
+        const cV = ltrim(vstr(v("SP4_9"))), nV = v("SP5_9");
+        CB.CB5_9 = nV === 0 ? "GrC bursts cover\rall timeslices" : "GrCs burst\r" + ({ 1: cV, 2: "RAND(1-" + cV + ")", 3: "RAND^2(1-" + cV + ")" }[nV] || "") + " times/cycle";
+      }
+    }
+  }
+
+  // the demo text in the box at the bottom left (EditBox LBP)
+  LBPCAPTION() {
+    const M = this.MEM;
+    const cFields = ["MODE", "VARIANT", "F3_13", "F3_4", "F3_5", "F3_6", "F3_7", "IBCM", "S1", "S2", "S1JIT", "S2JIT", "S1LIFT", "S2LIFT",
+      "ISI", "USDUR", "USFORCE", "S4START", "AUTOLIFT", "ILFMAX", "P", "D", "CAP", "CWA", "WA", "GFDUR", "GFDMODE", "GFTRIG", "GFTMODE",
+      "PEN", "CA", "B", "N", "DEMO"];
+    const cShowIf = ["0", "0", "0", "+", "+", "+", "+", "1", "1", "1", "0", "0", "+", "+", "0", "0", "0", "+", "-", "1",
+      "0", "0", "0", "0", "0", "1", "0", "1", "1", "0", "0", "+", "+", "-"];
+    // 0 = not shown when 0 ; 1 = not shown when 1 ; + = always shown ; - = never shown
+    let cLBP = "DECORRELATING ALGORITHM" + (this.cmd ? " DEMO " + this.cmd : "");
+    let cCMem = "";
+    for (let nX = 0; nX < cFields.length; nX++) {
+      const cX = cFields[nX];
+      let cO = PCOBJECTS[PCFIELDS.indexOf(cX)].replace("SP", "CB");
+      if (!this.enabled(cO)) continue;
+      let cC = cO.startsWith("OP") ? this.OPCAP[cO] : this.CB[cO];
+      if (cC.startsWith("N-t")) cC = "N-threshold = 10";
+      if (cC.indexOf("stimulus") >= 0) {
+        const t = cC.slice(cC.indexOf("=") + 1);
+        cLBP = cLBP.split("signal").join("signal at" + t);
+      }
+      if (M.MODE === 1 && M.F3_13 < 3 && cC.indexOf("%") >= 0) {   // with SUM+AVG or AVG derived
+        cC = cC.slice(0, 5) + ltrim(vstr(cC.startsWith("P") ? this.pnPv : this.pnDv, 5, 1));
+        if (M.F3_13 === 1) continue;
+      }
+      if ([1, 3, 4, 5].includes(M.MODE) && cC.indexOf("-t") >= 0) continue;           // no thresholds unless ELL
+      if ([2, 3, 4, 5, 6, 7].includes(M.MODE) && (cC.indexOf("% =") >= 0 || cC.indexOf("capping") >= 0)) continue;
+      if (M.MODE === 5 && (cC.indexOf("S4") >= 0 || cC.indexOf("GrC") >= 0)) continue;
+      if (cC.startsWith("Lift S1")) { cCMem = cC; continue; }
+      if (cC.startsWith("NO")) continue;
+      if (cC.indexOf("iBCM") >= 0 && cCMem.indexOf("iBCM") >= 0) continue;
+      if (cC.startsWith("Lift S2") && cCMem.startsWith("Lift S1")) {
+        const nCMem = vval(cC.slice(cC.indexOf("=") + 1)) + vval(cCMem.slice(cCMem.indexOf("=") + 1));
+        if (nCMem + this.pnLiftS1 + this.pnLiftS2 > 0) {
+          cC = "Excitatory lift added to S3 = " + ltrim(vstr(nCMem + vround(this.pnLiftS1, 0) + vround(this.pnLiftS2, 0))) + (M.AUTOLIFT === 1 ? " (autolifted)" : "");
+          cLBP = cLBP + "\r" + cC;
+        } else if (this.pnLift > 0) {
+          cC = "Excitatory lift added to S3 = " + ltrim(vstr(nCMem + vround(this.pnLift, 0))) + (M.AUTOLIFT === 1 ? " (autolifted)" : "");
+          cLBP = cLBP + "\r" + cC;
+        }
+        continue;
+      }
+      if (cC.indexOf("GFD =") >= 0 || cC.indexOf("GFT =") >= 0) continue;
+      if ((cC.startsWith("B-t") || cC.startsWith("Ca-t")) && this.pnBShift > 0) cC = cC + "+" + ltrim(vstr(this.pnBShift, 6, 2));
+      const cSI = cShowIf[nX];
+      if (cSI === "-") { cCMem = ""; continue; }
+      if (48 + M[cX] !== cSI.charCodeAt(0)) {
+        cC = cC.replace(/\r/g, " ");
+        const pair = (cC.indexOf("na-") >= 0 && cCMem.indexOf("na-") >= 0) || (cC.indexOf("Variant") >= 0 && cCMem.indexOf("simul") >= 0) ||
+          (cC.indexOf("US") >= 0 && cCMem.indexOf("US") >= 0) || (cC.indexOf("Sa-") >= 0 && cCMem.indexOf("Sa-") >= 0) ||
+          (cC.indexOf("Fa-") >= 0 && cCMem.indexOf("Fa-") >= 0) || (cC.indexOf("S2") >= 0 && cCMem.indexOf("S1") >= 0) ||
+          (cC.indexOf("D%") >= 0 && cCMem.indexOf("P%") >= 0) || (cC.indexOf("N-t") >= 0 && cCMem.indexOf("B-t") >= 0);
+        cLBP = cLBP + (pair ? ((cCMem + cC).length > 40 ? "\r" : "   ") : "\r") + cC;
+        cLBP = cLBP.split("wrong addressings").join("wrong addressing(s) for each right one");
+        cLBP = cLBP.split("US-").join("");
+        cLBP = cLBP.split("US dur").join("dur");
+        cCMem = cC;
+      } else cCMem = "";
+    }
+    cLBP = cLBP + ([3, 4, 5].includes(M.MODE) ? "" : "\r" + (this.pnDivMax > 1 ? "FIT-height reduced by factor " + ltrim(vstr(this.pnDivMax)) + " ." : ""));
+    const nO = (cLBP.match(/\r/g) || []).length;
+    cLBP = cLBP + "\r".repeat(Math.max(1, 10 - nO)) + "Click to interrupt / RightClick to stop";
+    this.obj.LBP.caption = cLBP;
+    if (M.AUTOLIFT === 1) this.LBSIGNALTEXT();
+  }
+}
+</script>
+<script>
+"use strict";
+// ---------------------------------------------------------------------------------------------
+// Demos of the articles (figure and page = the number printed at the bottom of the page,
+// Zenodo versions). The numbers are those of the original program: video "demo-1-N" = demo N.
+// ---------------------------------------------------------------------------------------------
+const SECTIONS = [
+  ["Part 2 – From MGC to PuC: PuC simulation (iBCM rule)", [
+    [80, "Fig. 7, p. 34", "PuC simulation: iBCM rule, no B-spike, non-inverted DS; Ca-threshold 42"],
+    [81, "Fig. 8a, p. 34", "S2 flat (no UC), Ca-threshold 21"],
+    [82, "Fig. 8b, p. 34", "S2 flat, Ca-threshold 11: the apexes of S3 transgress the threshold, LTD on synapses already at a minimum"],
+    [83, "Fig. 8c, p. 34", "S2 flat, Ca-threshold 31: a 'lift' of S4"]]]
+];
+const DEMOINFO = {};
+for (const [sec, list] of SECTIONS) for (const [n, fig, txt] of list) DEMOINFO[n] = { sec, fig, txt };
+const SPEEDS = [0.25, 0.5, 1, 2, 4, 8, 16];
+
+// ---------------------------------------------------------------------------------------------
+// Timing, measured in VFP 9 per mode: computing one iteration (250 timeslices), and drawing the screen
+// (DRAWALLLINES), which moves the 13 line objects of every timeslice one after the other, so that the
+// new state appears from left to right; the first drawing of a run takes longer. The slow start of
+// demo 26 (SLOW) is a counting loop of SLOW*1000000/ic^2 steps (about 15000 steps per ms).
+// The demo runs twice as fast as in VFP (AFTER_FIRST); only demos 5, 6 and 26 start with the first drawing in
+// slow motion, at the speed of VFP.
+// ---------------------------------------------------------------------------------------------
+const CYCLE_MS = { 1: 10, 2: 16, 6: 32 };
+const DRAW_MS = { 1: 960, 2: 1060, 6: 1080 };
+const FIRST_DRAW_MS = { 1: 6100, 2: 5900, 6: 6500 };
+const SLOW_STEPS_PER_MS = 15000;
+const AFTER_FIRST = 2;
+const SLOW_START = [5, 6, 26];
+
+// ---------------------------------------------------------------------------------------------
+// Painting the form (VFP objects in their z-order: labels first, then the line objects)
+// ---------------------------------------------------------------------------------------------
+const FORM_W = 632, PANEL_W = 236;
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const FONT_LBS = "bold 9px Arial, Helvetica, sans-serif";     // FontSize 7, bold
+const FONT_LBP = "11px Arial, Helvetica, sans-serif";          // FontSize 8
+const FONT_FIT = "12px Arial, Helvetica, sans-serif";          // FontSize 9 (label default)
+const FONT_LTL = "bold 8px Arial, Helvetica, sans-serif";      // FontSize 6, bold
+
+// GDI draws these small Arial fonts somewhat narrower or wider than the browser: horizontal scale per font
+// (measured on a screenshot of the VFP form)
+const SX = { [FONT_LBS]: 1.045, [FONT_LBP]: 0.93, [FONT_FIT]: 0.96, [FONT_LTL]: 1 };
+function text(s, x, y, font, maxW) {
+  ctx.save(); ctx.font = font; ctx.translate(x, y); ctx.scale(SX[font] || 1, 1);
+  ctx.fillText(s, 0, 0, maxW ? maxW / (SX[font] || 1) : undefined); ctx.restore();
+}
+function label(o, bg, font, lineH, padTop) {
+  if (!o.visible) return;
+  if (bg) { ctx.fillStyle = bg; ctx.fillRect(o.left, o.top, o.width, o.height); }
+  ctx.save();
+  ctx.beginPath(); ctx.rect(o.left, o.top, o.width, o.height); ctx.clip();
+  ctx.fillStyle = "#000"; ctx.font = font; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  const ls = String(o.caption).split("\r");
+  ls.forEach((s, k) => text(s, o.left + o.width / 2, o.top + padTop + k * lineH, font, o.width));
+  ctx.restore();
+}
+// EditBox LBP: border, word wrap, centred lines
+function wrapLines(text, width) {
+  ctx.font = FONT_LBP;
+  const out = [];
+  for (const para of text.split("\r")) {
+    if (para === "") { out.push(""); continue; }
+    let line = "";
+    for (const w of para.split(" ")) {
+      const t = line === "" ? w : line + " " + w;
+      if (ctx.measureText(t).width * SX[FONT_LBP] > width && line !== "") { out.push(line); line = w; } else line = t;
+    }
+    out.push(line);
+  }
+  return out;
+}
+function paint(D, shown) {
+  const H = D.nH, O = D.obj, L = shown || D.L;
+  cv.width = FORM_W; cv.height = H;
+  ctx.fillStyle = "#808080"; ctx.fillRect(0, 0, FORM_W, H);
+  ctx.strokeStyle = "#000"; ctx.lineWidth = 1;
+  for (const b of D.boxes) ctx.strokeRect(b[0] + .5, Math.min(b[1], b[3]) + .5, b[2] - b[0], Math.abs(b[3] - b[1]));
+  label(O.FIT1, "#f0f0f0", FONT_FIT, 0, 12);
+  for (const n of ["LB01", "LB011", "LB02", "LB022"]) if (O[n].visible) { ctx.fillStyle = O[n].color; ctx.fillRect(O[n].left, O[n].top, O[n].width, O[n].height); }
+  // LBP (EditBox)
+  const p = O.LBP;
+  ctx.fillStyle = "#abadb3"; ctx.fillRect(p.left, p.top, p.width, p.height);
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(p.left + 1, p.top + 1, p.width - 2, p.height - 2);
+  ctx.fillStyle = "#f0f0f0"; ctx.fillRect(p.left + 2, p.top + 2, p.width - 4, p.height - 4);
+  ctx.save(); ctx.beginPath(); ctx.rect(p.left + 2, p.top + 2, p.width - 4, p.height - 4); ctx.clip();
+  ctx.fillStyle = "#000"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  wrapLines(p.caption.replace(/\r*Click to (interrupt|resume) \/ RightClick to stop$/, ""), p.width - 10).forEach((s, k) => text(s, p.left + p.width / 2, p.top + 15 + k * 14, FONT_LBP));
+  ctx.restore();
+  for (let k = 1; k <= 8; k++) label(O["LBS" + k], "#c0c0c0", FONT_LBS, 11, 9);
+  // line objects: a vertical line covers the rows Top .. Top+Height-1
+  for (const n of ["L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "LR41", "LR52", "LR63", "LR14", "LR25", "LR36", "LFIT25"]) {
+    const a = L[n];
+    for (let i = 1; i < a.length; i++) {
+      const l = a[i];
+      if (l.height > 0 && l.top + l.height > 0) { ctx.fillStyle = l.color; ctx.fillRect(l.left, l.top, 1, l.height); }
+    }
+  }
+  // horizontal lines (class LT) and their labels; a horizontal line covers Left .. Left+Width-1
+  const hline = o => { if (o.visible && o.top >= 0) { ctx.fillStyle = o.color; ctx.fillRect(o.left, o.top, o.width, 1); } };
+  for (const n of ["LTC3", "LTB3", "LTN3", "LTC5"]) { hline(O[n]); }
+  for (const n of ["LTCL3", "LTBL3", "LTNL3", "LTCL5"]) if (O[n].top >= 0) label(O[n], "#f0f0f0", FONT_LTL, 0, 8);
+  for (let k = 1; k <= 8; k++) hline(O["LTA" + k]);
+  hline(O.S5HALT);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Running a demo: EXECUTE as a generator, paced to the speed of the original program
+// ---------------------------------------------------------------------------------------------
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const cloneLines = L => { const o = {}; for (const n in L) o[n] = L[n].map(l => l && Object.assign({}, l)); return o; };
+class App {
+  constructor() { this.speed = 1; this.seed = null; this.demo = 0; this.D = null; this.run = 0; this.state = "idle"; }
+  load(demo) {
+    this.run++;
+    this.demo = demo;
+    const rnd = this.seed !== null ? parkMiller(this.seed) : parkMiller(1 + Math.floor(Math.random() * 2147483645));
+    this.D = new Decorrelator({ rand: rnd, height: H_FORM });
+    this.D.DEMO(demo);
+    this.state = "wait";
+    this.shown = cloneLines(this.D.L);
+    this.draws = 0;
+    paint(this.D);
+    markRun();
+    // the demo starts with the button '(Re)Start this demo'
+  }
+  async go() {
+    if (this.state !== "wait") return;
+    this.state = "run";
+    markRun();
+    const myRun = this.run, D = this.D;
+    const gen = D.EXECUTE();
+    let due = performance.now();
+    const mode = D.MEM.MODE;
+    for (let r = gen.next(); !r.done; r = gen.next()) {
+      if (myRun !== this.run) return;
+      const slowStart = SLOW_START.includes(this.demo) && this.draws === 0;
+      const f = slowStart ? 1 : AFTER_FIRST;
+      due += (CYCLE_MS[mode] || 10) / this.speed / f;
+      if (r.value.drawn) {
+        if (!r.value.end && D.MEM.SLOW > 0 && D.pnIC >= 2) due += D.MEM.SLOW * 1e6 / (D.pnIC * D.pnIC) / SLOW_STEPS_PER_MS / this.speed / f;
+        this.draws++;
+        await this.sweep(myRun, Math.max(0, due - performance.now()), slowStart ? FIRST_DRAW_MS[mode] || 6000 : (DRAW_MS[mode] || 960) / AFTER_FIRST);
+        if (myRun !== this.run) return;
+        due = performance.now();
+      }
+      let now = performance.now();
+      if (due > now + 4) {
+        await sleep(Math.max(0, due - now));
+        while (D.plPause && myRun === this.run) await sleep(50);
+        if (myRun !== this.run) return;
+        now = performance.now();
+        if (due < now - 250) due = now;     // the browser lagged behind: do not try to catch up
+      }
+    }
+    this.shown = cloneLines(D.L);
+    paint(D);
+    this.state = "done";
+    markRun();
+  }
+  // DRAWALLLINES: the new positions appear timeslice by timeslice, from left to right
+  async sweep(myRun, wait, ms) {
+    const D = this.D, target = cloneLines(D.L), names = Object.keys(target);
+    if (wait > 0) await sleep(wait);
+    let done = 0, t0 = performance.now(), paused = 0;
+    while (done < 250) {
+      if (myRun !== this.run) return;
+      if (D.plPause) { const p0 = performance.now(); while (D.plPause && myRun === this.run) await sleep(50); paused += performance.now() - p0; }
+      const k = Math.min(250, Math.floor(250 * (performance.now() - t0 - paused) * this.speed / ms) + 1);
+      for (let i = done + 1; i <= k; i++) for (const n of names) this.shown[n][i] = target[n][i];
+      done = k;
+      paint(D, this.shown);
+      if (done < 250) await sleep(16);       // (not requestAnimationFrame: that stops in a background tab)
+    }
+  }
+  pause() {
+    const D = this.D;
+    if (!D || this.state !== "run") return;
+    D.plPause = !D.plPause;
+    paint(D, this.shown);
+    markRun();
+  }
+  stop() { if (this.D && this.state === "run") { this.D.plBreak = true; this.D.plPause = false; markRun(); } }
+}
+// the Interrupt / Resume and Stop buttons
+function markRun() {
+  const bi = document.getElementById("bint"), bs = document.getElementById("bstop");
+  if (!bi) return;
+  const running = app.state === "run", paused = !!(app.D && app.D.plPause);
+  const bg = document.getElementById("bgo");
+  if (bg) bg.classList.toggle("blink", !running);
+  bi.disabled = !running; bs.disabled = !running;
+  bi.textContent = paused ? "\u25B6  Resume" : "\u275A\u275A  Interrupt";
+  bi.classList.toggle("paused", paused);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Demo panel
+// ---------------------------------------------------------------------------------------------
+const panel = document.getElementById("panel");
+const app = new App();
+let H_FORM = 542;
+function buildPanel() {
+  panel.innerHTML = "";
+  const add = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; panel.appendChild(e); return e; };
+  add("div", "ttl", "DECORRELATOR");
+  add("div", "sub", "ELL article Part 2, Beunis 2022 – live demos");
+  const ctl = add("div", "row"); ctl.id = "ctl";
+  const bi = document.createElement("button"); bi.id = "bint"; bi.tabIndex = -1;
+  bi.title = "Interrupt the demo, and resume it";
+  bi.addEventListener("click", () => app.pause());
+  const bs = document.createElement("button"); bs.id = "bstop"; bs.tabIndex = -1; bs.textContent = "\u25A0  Stop";
+  bs.title = "Stop the run of 250 iterations: the end result is drawn";
+  bs.addEventListener("click", () => app.stop());
+  ctl.appendChild(bi); ctl.appendChild(bs);
+  for (const [sec, list] of SECTIONS) {
+    const s = add("div", "sec", sec); s.title = sec;
+    const row = add("div", "row");
+    for (const [n, fig, txt] of list) {
+      const b = document.createElement("button");
+      b.textContent = n; b.dataset.demo = n; b.tabIndex = -1;
+      b.title = "Demo " + n + " – " + fig + "\n" + txt;
+      b.addEventListener("click", () => { gcCount("demo-" + n, "Demo " + n + " (panel)"); select(n); });
+      row.appendChild(b);
+    }
+  }
+  // the other programs of Part 2
+  const os = add("div", "sec", "Part 2 – Addendum 'Random connectivity examined'"); os.title = os.textContent;
+  const ol = add("div", ""); ol.style.cssText = "font-size:10.5px;line-height:1.5;margin:1px 0 2px 2px";
+  for (const [href, txt, tip] of [["connectivity.html", "Demo 4-1 – Fig. 16, p. 59 (CONNECTIVITY)", "Decorrelation with randomly connected granule cells in a 4D input space"],
+                                  ["counts.html?dims=4&ppv=4,4,4,4&sur=0", "RA and WA counts", "Counts of right and wrong addressings as a function of dimensionality, PPVs per axis and surnumerary dendrites"]]) {
+    const a = document.createElement("a"); a.href = href; a.textContent = txt; a.title = tip; a.style.color = "#0645ad";
+    ol.appendChild(a); ol.appendChild(document.createElement("br"));
+  }
+  add("div", "", "").id = "info";
+  const spd = add("div", "row"); spd.id = "spd";
+  const sl = document.createElement("span"); sl.textContent = "Speed "; sl.style.cssText = "font-weight:bold;font-size:10px;line-height:19px";
+  sl.title = "Playback speed, as with a video player.\n1x is the speed of the original program in Visual FoxPro 9.\nCan be changed while a demo is running.";
+  spd.appendChild(sl);
+  for (const sp of SPEEDS) {
+    const b = document.createElement("button");
+    b.textContent = sp + "×"; b.dataset.speed = sp; b.tabIndex = -1;
+    b.addEventListener("click", () => { app.speed = sp; markPanel(); updateUrl(); });
+    spd.appendChild(b);
+  }
+  const go = add("button", "", "(Re)Start this demo"); go.id = "bgo"; go.tabIndex = -1;
+  go.title = "Start the chosen demo, or run it again (with a new random signal S2).";
+  go.addEventListener("click", () => {
+    if (app.state !== "wait") select(app.demo);
+    gcCount("run-" + app.demo, "Demo " + app.demo + " started");
+    app.go();
+  });
+}
+function markPanel() {
+  for (const b of panel.querySelectorAll("button[data-demo]")) b.classList.toggle("on", +b.dataset.demo === app.demo);
+  for (const b of panel.querySelectorAll("button[data-speed]")) b.classList.toggle("on", +b.dataset.speed === app.speed);
+  const i = DEMOINFO[app.demo];
+  document.getElementById("info").innerHTML = "";
+  if (i) {
+    const info = document.getElementById("info");
+    const b = document.createElement("b"); b.textContent = "Demo " + app.demo + " – " + i.fig; info.appendChild(b);
+    info.appendChild(document.createTextNode("\n" + i.txt));
+  }
+}
+function updateUrl() {
+  const p = new URLSearchParams(location.search);
+  p.set("demo", String(app.demo));
+  if (app.speed !== 1) p.set("speed", String(app.speed)); else p.delete("speed");
+  const q = p.toString();
+  try { history.replaceState(null, "", location.pathname + (q ? "?" + q : "") + location.hash); } catch (e) { /* file:// */ }
+}
+function select(n) { app.load(n); markPanel(); updateUrl(); }
+
+// ---------------------------------------------------------------------------------------------
+// Start-up, scaling, input
+// ---------------------------------------------------------------------------------------------
+const stage = document.getElementById("stage");
+function fit() {
+  const W = FORM_W + PANEL_W;
+  Object.assign(panel.style, { left: FORM_W + "px", width: PANEL_W + "px", height: H_FORM + "px" });
+  Object.assign(stage.style, { width: W + "px", height: H_FORM + "px" });
+  let k = Math.min(window.innerWidth / W, window.innerHeight / H_FORM);
+  if (k > 0.96 && k < 1.04) k = 1;
+  stage.style.transform = "scale(" + k + ")";
+  stage.style.left = Math.max(0, (window.innerWidth - W * k) / 2) + "px";
+  stage.style.top = Math.max(0, (window.innerHeight - H_FORM * k) / 2) + "px";
+}
+window.addEventListener("resize", fit);
+
+const params = new URLSearchParams(location.search);
+let demo = parseInt(params.get("demo") || "80", 10);
+if (!DEMOINFO[demo]) demo = 80;
+let speed = parseFloat(params.get("speed") || "1");
+if (!(speed > 0)) speed = 1;
+app.speed = Math.min(16, Math.max(0.25, speed));
+const seedParam = params.get("seed");
+if (seedParam !== null && /^\d+$/.test(seedParam)) app.seed = parseInt(seedParam, 10);
+if (params.get("h")) H_FORM = Math.max(400, Math.min(800, parseInt(params.get("h"), 10) || 542));
+buildPanel();
+fit();
+select(demo);
+window.decorrelator = app;   // for inspection in the browser console
+
+if (params.get("final") === "1") {   // test: compute the whole demo at once and show the end result
+  app.state = "run";
+  const g = app.D.EXECUTE(); for (let r = g.next(); !r.done; r = g.next()) { /* */ }
+  paint(app.D); app.state = "done";
+}
+
+// GoatCounter: count a page view or an event; blocked or unavailable counters are silently ignored.
+function gcCount(path, title, event = true, tries = 0) {
+  const gc = window.goatcounter;
+  if (gc && typeof gc.count === "function") {
+    try { gc.count({ path: path, title: title, event: event }); } catch (e) { /* ignore */ }
+  } else if (tries < 20) {
+    setTimeout(() => gcCount(path, title, event, tries + 1), 500);
+  }
+}
+gcCount(location.pathname + "?demo=" + demo, "DECORRELATOR - demo " + demo, false);
+
+// Tooltips on touch screens: press and hold a control (about half a second) to see its explanation.
+const tipBox = document.createElement("div");
+tipBox.id = "tip";
+document.body.appendChild(tipBox);
+let lpTimer = null, lpFired = false, lpStart = null, tipHide = null, lastPointerType = "mouse";
+function hideTip() { tipBox.style.display = "none"; clearTimeout(tipHide); }
+function showTip(el) {
+  tipBox.textContent = el.title;
+  tipBox.style.display = "block";
+  const r = el.getBoundingClientRect(), tw = tipBox.offsetWidth, th = tipBox.offsetHeight;
+  let x = Math.min(Math.max(4, r.left + r.width / 2 - tw / 2), window.innerWidth - tw - 4);
+  let y = r.bottom + 6;
+  if (y + th > window.innerHeight - 4) y = Math.max(4, r.top - th - 6);
+  tipBox.style.left = x + "px"; tipBox.style.top = y + "px";
+  clearTimeout(tipHide); tipHide = setTimeout(hideTip, 10000);
+}
+function cancelLongPress() { clearTimeout(lpTimer); lpTimer = null; }
+document.addEventListener("pointerdown", e => {
+  lastPointerType = e.pointerType;
+  hideTip();
+  if (e.pointerType !== "touch") return;
+  const el = e.target.closest("[title]");
+  if (!el || !el.title) return;
+  lpFired = false; lpStart = [e.clientX, e.clientY];
+  lpTimer = setTimeout(() => { lpTimer = null; lpFired = true; showTip(el); }, 500);
+}, true);
+document.addEventListener("pointermove", e => {
+  if (lpTimer && Math.hypot(e.clientX - lpStart[0], e.clientY - lpStart[1]) > 10) cancelLongPress();
+}, true);
+document.addEventListener("pointerup", cancelLongPress, true);
+document.addEventListener("pointercancel", cancelLongPress, true);
+document.addEventListener("click", e => {   // a long press is not a click
+  if (lpFired) { lpFired = false; e.stopPropagation(); e.preventDefault(); }
+}, true);
+document.addEventListener("contextmenu", e => { if (lastPointerType === "touch") e.preventDefault(); });
+</script>
+</body>
+</html>

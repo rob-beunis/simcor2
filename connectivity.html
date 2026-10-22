@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en" translate="no" class="notranslate">
+<head>
+<meta charset="utf-8">
+<meta name="google" content="notranslate">
+<!-- Privacy-friendly visitor counter (GoatCounter: no cookies, no personal data). Counting is done
+     explicitly in the script below (page opened, run started); localhost is not counted. -->
+<script data-goatcounter="https://simcor2.goatcounter.com/count"
+        data-goatcounter-settings='{"no_onload": true}'
+        async src="https://gc.zgo.at/count.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CONNECTIVITY – Beunis (2022b)</title>
+<meta name="description" content="Live demo accompanying R. Beunis (2022), The electrosensory lateral line lobe in mormyrid fish: a stepping stone to the understanding of the cerebellum? Part 2 (the cerebellum), Addendum 'Random connectivity examined': decorrelation with randomly connected granule cells in a multidimensional input space.">
+<!--
+  CONNECTIVITY - web version (HTML/JavaScript) of the left half of the CONNECTIVITY form of the author's
+  article reader CEREBREADER.PRG (R. Beunis, Visual FoxPro 9.0), as it runs in demo-4-1 (Fig. 16).
+  One self-contained file, no external libraries.
+
+  Article: Beunis R. (2022b) The electrosensory lateral line lobe in mormyrid fish : a stepping stone to the
+           understanding of the cerebellum ? (Part 2/2 : the cerebellum). Zenodo, doi:10.5281/zenodo.17613147
+
+  The random numbers are those of VFP's RAND() (the generator was measured), starting as in a freshly
+  started VFP: '(Re)Start this demo' gives exactly the run of Fig. 16 and the video of the article. The
+  results are identical to those of the original (checked against runs in Visual FoxPro 9 with 3, 4 and 5
+  inputs: the averages after iteration 1, 2, 5, 10 and 50, the number of RAND calls, the combination lists,
+  and the drawing of the graphs pixel by pixel).
+
+  URL parameters:  ?speed=0.25..16   &seed=N (the random numbers of RAND(N) instead of the start-up state)
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #808080; overflow: hidden; }
+  body { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  #stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; touch-action: manipulation;
+           font-family: Arial, Helvetica, "Liberation Sans", sans-serif; }
+  #form { position: absolute; left: 0; top: 0; background: #000; overflow: hidden; }
+  #cv { position: absolute; left: 0; top: 0; }
+  #form.busy .ctl { pointer-events: none; }
+  /* VFP command buttons (Windows 10 look) */
+  .vbtn { position: absolute; box-sizing: border-box; height: 30px; margin: 0; padding: 0 2px; background: #fdfdfd;
+          border: 1px solid #adadad; border-radius: 3px; color: #000; font: bold 12px Arial, Helvetica, sans-serif;
+          cursor: pointer; line-height: 1.05; white-space: normal; }
+  .vbtn:hover { background: #e5f1fb; border-color: #0078d7; }
+  .vbtn.small { font-size: 9.3px; }
+  .vbtn:disabled { color: #a0a0a0; cursor: default; background: #fdfdfd; border-color: #cfcfcf; }
+  /* VFP spinners */
+  .vspin { position: absolute; box-sizing: border-box; height: 30px; background: #fff; border: 1px solid #7a7a7a; }
+  .vspin input { position: absolute; left: 0; top: 0; width: 33px; height: 28px; box-sizing: border-box; border: 0;
+                 padding: 0 3px 13px 0; margin: 0; text-align: right; font: bold 9.3px Arial, Helvetica, sans-serif;
+                 background: transparent; color: #000; outline: none; -moz-appearance: textfield; }
+  .vspin input::-webkit-outer-spin-button, .vspin input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .vspin button { position: absolute; right: 1px; width: 15px; height: 13px; padding: 0; margin: 0; background: #f0f0f0;
+                  border: 1px solid #adadad; font: 7px Arial, sans-serif; color: #000; cursor: pointer; line-height: 1; }
+  .vspin button.up { top: 1px; } .vspin button.dn { top: 14px; }
+  .vspin button:hover { background: #e5f1fb; border-color: #0078d7; }
+  /* VFP edit boxes (the combination lists) */
+  .vlist { position: absolute; box-sizing: border-box; background: #000; border: 1px solid #fff; box-shadow: inset 0 0 0 1px #828790;
+           padding: 4px 3px 2px 5px; overflow-y: scroll; overflow-x: hidden; white-space: pre-wrap; overflow-wrap: break-word;
+           font: bold 9.333px/11px Arial, Helvetica, sans-serif; scrollbar-width: thin; scrollbar-color: #c0c0c0 #f0f0f0;
+           user-select: text; -webkit-user-select: text; }
+  #panel { position: absolute; top: 0; background: #d4d0c8; box-sizing: border-box; padding: 5px 6px; overflow: hidden;
+           font: 11px Arial, Helvetica, sans-serif; color: #000; }
+  #panel .ttl { font-weight: bold; font-size: 13px; text-align: center; }
+  #panel .sub { font-size: 10px; text-align: center; margin-bottom: 3px; }
+  #panel .row { display: flex; flex-wrap: wrap; gap: 2px; }
+  #panel button { font: bold 10px Arial, Helvetica, sans-serif; height: 19px; width: 30px; padding: 0; margin: 0;
+                  background: #e1e1e1; border: 1px solid #adadad; color: #000; cursor: pointer; }
+  #panel button:hover { background: #e5f1fb; border-color: #0078d7; }
+  #panel button.on { background: #ffff00; border: 2px solid #000; }
+  #panel #ctl { gap: 6px; margin: 2px 0 4px 0; }
+  #panel #ctl button { height: 30px; font-size: 12px; border: 2px solid #000; border-radius: 3px; }
+  #panel #bint { width: 118px; background: #ffd24d; }
+  #panel #bstop { width: 90px; background: #ff6b5b; color: #fff; }
+  #panel #ctl button:disabled { background: #e1e1e1; color: #a0a0a0; border-color: #adadad; cursor: default; }
+  #panel #bint.paused { background: #7ee07e; }
+  #panel #bgo { width: 100%; height: 32px; font-size: 13px; border: 2px solid #000; border-radius: 3px; margin-top: 6px; }
+  /* the start button is red on yellow as long as no demo is running */
+  #panel #bgo.blink { color: #ff0000; background: #ffff00; }
+  #info { margin-top: 6px; padding: 4px 5px; background: #fff; border: 1px solid #808080;
+          font-size: 10.5px; line-height: 1.3; white-space: pre-wrap; }
+  #info b { font-size: 11px; }
+  #info a, #links a { color: #0645ad; }
+  #links { margin-top: 6px; font-size: 10.5px; line-height: 1.4; }
+  #spd { margin-top: 6px; }
+  #tip { position: fixed; z-index: 1000; display: none; max-width: 320px; padding: 6px 8px; background: #ffffe1;
+         border: 1px solid #000; box-shadow: 2px 2px 6px rgba(0,0,0,.4); font: 13px Arial, Helvetica, sans-serif;
+         color: #000; white-space: pre-wrap; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="form"><canvas id="cv"></canvas></div>
+  <div id="panel"></div>
+</div>
+<script>
+// ===================================================================================================
+// CONNECTIVITY - computing core (translation of the left half of the CONNECTIVITY form of
+// CEREBREADER.PRG, R. Beunis, Visual FoxPro 9.0). Procedure names follow the original.
+// Each timeslice of the A-path is fed by 256 granule cells (GrCs), each with a random input permutation
+// in which up to NOLI inputs may be lacking (replaced by a redundant one). A GrC with a lacking input
+// fires at a 'wrong address' (the pcWAF formula); the decorrelation (an averaging with P = D = 1%) of the
+// unchanging signal S1 (+ the slowly varying S2) is then disturbed by these wrong addressings (WAs).
+// ===================================================================================================
+"use strict";
+
+// RAND() of Visual FoxPro 9 (measured): x = (87137421 * x + 21132487) mod 2^32, RAND() = x / 2^32, a value
+// >= 0.999995 is skipped; RAND(seed) sets x = seed; at start-up x = 100001. A run with the start-up state
+// is the run of the article.
+const VFP_SEED = 100001;
+function vfpRand(seed) {
+  let s = seed >>> 0;
+  const f = function () {
+    do { s = (Math.imul(87137421, s) + 21132487) >>> 0; } while (s >= 4294945822);   // 0.999995 * 2^32
+    f.count++;
+    return s / 4294967296;
+  };
+  f.count = 0;
+  return f;
+}
+// Park-Miller generator: exact in doubles, used in the VFP test copy (XRAND) (test: ?pm=seed)
+function parkMiller(seed) {
+  let s = seed % 2147483647;
+  if (s <= 0) s += 2147483646;
+  const f = function () { s = (s * 16807) % 2147483647; f.count++; return s / 2147483647; };
+  f.count = 0;
+  return f;
+}
+const vmod = (a, b) => a - Math.floor(a / b) * b;     // MOD(): the result has the sign of the divisor
+const DTOR = x => x * Math.PI / 180;
+
+// ---- Constants ----------------------------------------------------------------------------------------
+const PNH = 516, PNW = 1264;            // the form maximized on a 1280 x 720 screen (as in the article's video)
+const PNWOBJ = PNW / 12;
+const PNITS = 50, PNCONSTEPS = 256, NCOMBS = 256;
+const PND = .01, PNP = .01;             // D-factor, P-factor
+const PNHMEM = 30;                      // (a global of the article reader, 30 at start-up)
+const ZWART = "#000000", ROOD = "#ff0000";
+// FCOLOR: the colour of the list / graph of NOLI 0..4
+const FCOLOR = n => ["#00ff00", "#ff8080", "#00ffff", "#ffff00", "#ff80ff"][n];
+const LIST_H = 97;                      // (pnH - PCON3.Height) / 5
+const listTop = n => 30 + n * LIST_H;   // PCON3.Height + nX * Height
+
+class Connectivity {
+  constructor(rand, gfx, ui) {
+    this.rand = rand; this.gfx = gfx; this.ui = ui;
+    this.pnR = 1;                         // global of the article reader (STORE 1 TO ... pnR)
+    this.pnInputs = 4;
+    this.ordered = false;                 // PORCB.Caption: "Input permutations" (false) / "Ordered combinations"
+    this.S1 = new Float64Array(PNCONSTEPS + 1);
+    this.MAKE_S1();
+    // PLISTAG / PLISTOR: per NOLI the generated combinations (identical in every iteration) and
+    // how far the run got (the lists exist for the iterations and timeslices already computed)
+    this.PL = [];
+    this.plPause = false; this.plBreak = false;
+  }
+  MAKE_S1() { for (let nTS = 1; nTS <= PNCONSTEPS; nTS++) this.S1[nTS] = this.S1BASE(nTS); }
+  S1BASE(nTS) {
+    nTS = nTS / (1.5 * (257 - nTS) / 257 + .5);
+    return Math.max(1, (Math.abs(vmod(nTS, 10) - 5) / 40) * 50 + 2 + ((Math.sin(DTOR(nTS * 13 - 90)) + 1) / 4) * 25);
+  }
+  S2BASE(nL) {
+    return Math.min(30, Math.max(10, Math.abs(PNHMEM) + this.WANDERINGLINE(nL) * (Math.abs(vmod(nL, 10) - 5) / 40) * 50));
+  }
+  WANDERINGLINE(nX) {
+    const nR = this.rand();
+    this.pnR = vmod(nX, 5) === 0 ? nR : this.pnR;
+    return this.pnR - .5;
+  }
+  PREP() {
+    // pnCVC^pnInputs as close as possible to 256 (the max number of timeslices displayed), not exceeding it
+    this.pnCVC = { 3: 6, 4: 4, 5: 3 }[this.pnInputs];
+    this.nTS = this.pnCVC ** this.pnInputs;
+    // the 'wrong addressing' formula, e.g. (nAA-1)*64+(nBB-1)*16+(nCC-1)*4+(nDD-1)*1+1 for 4 inputs
+    this.mult = [];
+    for (let k = 0; k < this.pnInputs; k++) this.mult.push(this.pnCVC ** (this.pnInputs - 1 - k));
+    this.ui.setSpinners(1, 1, PNITS, this.nTS);
+  }
+  // RANDCOMB: a random combination 'as generated': pnInputs characters, rejected when more than nNOLI
+  // inputs would be lacking (a character occurring x (> nNOLI) times implies x-1 lacking inputs)
+  RANDCOMB(nNOLI) {
+    const n = this.pnInputs;
+    for (;;) {
+      let cX = "";
+      for (let nX = 1; nX <= n; nX++) cX += String.fromCharCode(96 + Math.trunc(this.rand() * n) + 1);
+      let nFlag = 0;
+      for (let nR = 1; nR <= n; nR++) {
+        const cR = String.fromCharCode(nR + 96);
+        let o = 0;
+        for (const ch of cX) if (ch === cR) o++;
+        if (o > nNOLI) nFlag += o - 1;
+      }
+      if (!(nFlag > nNOLI)) return cX;
+    }
+  }
+  // COMBOR: place the inputs 'in order of dimension' and fill in the gaps with the redundant ones
+  COMBOR(cRCAG) {
+    const n = this.pnInputs, o = new Array(n).fill(" ");
+    for (let nI = 1; nI <= n; nI++) {
+      const cPI = String.fromCharCode(nI + 96);
+      const k = cRCAG.indexOf(cPI);
+      if (k >= 0) { o[nI - 1] = cPI; cRCAG = cRCAG.slice(0, k) + cRCAG.slice(k + 1); }
+    }
+    for (const cRI of cRCAG.split("").sort()) o[o.indexOf(" ")] = cRI;   // ALFABETIC
+    return o.join("");
+  }
+  // the text of a list (PLISTAG / PLISTOR) for NOLI n, iteration it, timeslice ts; '' when not computed
+  listText(n, it, ts) {
+    const s = this.PL[n];
+    if (!s || it > PNITS || ts > s.nTS || !(s.itc > it || (s.itc === it && s.tsc >= ts))) return "";
+    const arr = this.ordered ? s.rcor : s.rcag;
+    let t = this.ordered ? NCOMBS + " parallel ordered combinations"
+                         : NCOMBS + " parallel input permutations as generated at random";
+    t += "\r" + "Iteration " + it + " Timeslice " + ts + "\r";
+    for (let c = 0; c < NCOMBS; c++) t += arr[(ts - 1) * NCOMBS + c] + " ";
+    return t;
+  }
+  // ISP.Click / ICB.Click: show the lists of the chosen iteration and timeslice
+  SPINCLICK() {
+    const [it, ts] = this.ui.getSpinners();
+    for (let n = 0; n < this.pnInputs; n++) this.ui.setList(n, this.listText(n, it, ts));
+  }
+  PORCLICK() { this.ordered = !this.ordered; this.ui.setPorCaption(this.ordered); this.SPINCLICK(); }
+
+  // DORUN: four (three, five) decorrelation runs of 50 iterations, allowing 0, 1, ... lacking inputs.
+  // A generator: yields after every timeslice the time it took in VFP 9 (ms).
+  *DORUN() {
+    const g = this.gfx, n = this.pnInputs;
+    this.PREP();
+    g.clear();                                   // FOR nX=1 TO pnH : Line(0,nX,pnW/2,nX) in black
+    this.ui.hideLists();
+    const nSH = 90;
+    const S4 = new Float64Array(PNCONSTEPS + 1);
+    const coords = new Int32Array(5);
+    for (let nNOLI = 0; nNOLI <= n - 1; nNOLI++) {
+      const nCLTop = listTop(nNOLI);
+      this.ui.showList(nNOLI);
+      const nFC = FCOLOR(nNOLI);
+      S4.fill(0);
+      const slot = { nTS: this.nTS, itc: 0, tsc: 0, rcag: new Array(this.nTS * NCOMBS), rcor: new Array(this.nTS * NCOMBS) };
+      this.PL[nNOLI] = slot;
+      const W = new Int32Array(this.nTS * NCOMBS);   // the wrong address of each combination
+      for (let nITC = 1; nITC <= PNITS; nITC++) {
+        let nTSC = 0;
+        // the nested loops nA, nB, ... over the coordinate values of the dimensions
+        for (let t = 0; t < this.nTS; t++) {
+          let r = t;
+          for (let k = n - 1; k >= 0; k--) { coords[k] = r % this.pnCVC + 1; r = Math.trunc(r / this.pnCVC); }
+          nTSC++;
+          const r0 = this.rand.count;
+          for (let nCOMB = 0; nCOMB < NCOMBS; nCOMB++) {
+            const idx = t * NCOMBS + nCOMB;
+            if (nITC === 1) {
+              const cRCAG = this.RANDCOMB(nNOLI);
+              const cRCOR = this.COMBOR(cRCAG);
+              slot.rcag[idx] = cRCAG; slot.rcor[idx] = cRCOR;
+              // the place nT in cRCOR is the target dimension, its letter the source dimension
+              let w = 1;
+              for (let k = 0; k < n; k++) w += (coords[cRCOR.charCodeAt(k) - 97] - 1) * this.mult[k];
+              W[idx] = w;
+            }
+            const nTSWA = W[idx];                      // the (wrong) address
+            const m = S4[nTSWA];                       // S4M: remember the actual AVG value
+            S4[nTSWA] = S4[nTSWA] - S4[nTSWA] * PND + (this.S1[nTSC] + this.S2BASE(nITC)) * PNP;
+            if (nITC === 1 || Math.trunc(m) !== Math.trunc(S4[nTSWA])) {   // redraw only when discretely different
+              g.line(nTSWA + 35, nCLTop + nSH, nCLTop + nSH - 55, ZWART);  // black line first to erase the former one
+              g.line(nTSWA + 35, nCLTop + nSH, nCLTop + nSH - S4[nTSWA], nFC);
+            }
+          }
+          slot.itc = nITC; slot.tsc = nTSC;
+          if (nITC === 1 && nTSC === 1) this.ui.setList(nNOLI, this.listText(nNOLI, 1, 1));
+          yield nITC === 1 ? TS_FIRST_MS + (this.rand.count - r0) * RAND_MS : TS_MS;
+          while (this.plPause && !this.plBreak) yield 0;
+          if (this.plBreak) return;
+        }
+        g.print(nNOLI === 0 ? "No inputs lacking" : nNOLI + " input" + (nNOLI === 1 ? "" : "s") + " may be lacking", 10, nCLTop, nFC);
+        g.print(nNOLI === 0 ? "All dendrites receive distinct inputs" : "Same input on " + (nNOLI + 1) + " dendrites allowed", 10, nCLTop + 20, nFC);
+        g.print(String(nITC), 10, nCLTop + 50, nFC);
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Timing, measured in VFP 9 (on a 1280 x 720 screen, as the article's video): iteration 1 of a run
+// (generating the 256 random combinations of every timeslice) takes 3.7 to 6.7 s, every following
+// iteration about 0.79 s. The demo runs twice as fast as in VFP (AFTER_FIRST).
+// ---------------------------------------------------------------------------------------------
+const TS_FIRST_MS = 2600 / 256, RAND_MS = 0.0012, TS_MS = 790 / 256;
+const AFTER_FIRST = 2;
+const SPEEDS = [0.25, 0.5, 1, 2, 4, 8, 16];
+
+// ---------------------------------------------------------------------------------------------
+// Drawing on the form (VFP Form.Line / Form.Print)
+// ---------------------------------------------------------------------------------------------
+const FORM_W = PNW / 2, PANEL_W = 236;
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+cv.width = FORM_W; cv.height = PNH;
+const FONT = "bold 10.667px Arial, Helvetica, sans-serif";    // FontSize 8, bold
+// the advance of the characters 32..126 in this font as VFP draws them (TextWidth, measured in VFP 9):
+// the text is drawn character by character at these positions; TextHeight is 14
+const GDI8 = [3,3,5,6,6,9,8,3,4,4,4,6,3,4,3,3,6,6,6,6,6,6,6,6,6,6,3,3,6,6,6,7,11,8,7,8,7,6,6,8,7,3,6,7,7,10,7,8,
+              7,8,7,7,7,7,8,10,7,7,7,4,3,4,6,6,4,6,7,6,7,7,4,7,7,3,3,7,3,11,7,7,7,7,5,7,4,7,6,10,6,6,6,4,3,4,6];
+const adv = c => GDI8[c.charCodeAt(0) - 32] || 6;
+const gfx = {
+  pending: null,
+  // a vertical Form.Line from y1 (integer) up to y2: VFP colours the rows INT(y2)+1 .. y1 (measured)
+  line(x, y1, y2, color) {
+    this.flush();
+    const top = Math.trunc(y2) + 1;
+    if (y1 >= top) { ctx.fillStyle = color; ctx.fillRect(x, top, 1, y1 - top + 1); }
+  },
+  clear() { this.flush(); ctx.fillStyle = ZWART; ctx.fillRect(0, 1, FORM_W, PNH); },
+  // Form.Print: opaque text; VFP shows a printed text only once the next drawing operation comes
+  // (the last number of a run stays one iteration behind, as in the original)
+  print(s, x, y, color) { this.flush(); this.pending = [s, x, y, color]; },
+  flush() {
+    if (!this.pending) return;
+    const [s, x, y, color] = this.pending;
+    this.pending = null;
+    let w = 0;
+    for (const c of s) w += adv(c);
+    ctx.fillStyle = ZWART; ctx.fillRect(x, y, w, 14);
+    ctx.font = FONT; ctx.fillStyle = color;
+    let cx = x;
+    for (const c of s) { ctx.fillText(c, cx, y + 11); cx += adv(c); }
+  },
+  blank() { this.pending = null; ctx.fillStyle = ZWART; ctx.fillRect(0, 0, FORM_W, PNH); }
+};
+
+// ---------------------------------------------------------------------------------------------
+// The controls of the form (left half): CONCB, ICB, ISP, PLIST
+// ---------------------------------------------------------------------------------------------
+const form = document.getElementById("form");
+Object.assign(form.style, { width: FORM_W + "px", height: PNH + "px" });
+function el(tag, cls, css, parent) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  Object.assign(e.style, css || {});
+  (parent || form).appendChild(e);
+  return e;
+}
+const px = v => v + "px";
+const CON = {};
+for (let n = 3; n <= 5; n++) {
+  const b = el("button", "vbtn ctl", { left: px(Math.trunc((n - 3) * PNWOBJ)), top: "0", width: px(Math.trunc(PNWOBJ)) });
+  b.textContent = n + " inputs"; b.tabIndex = -1;
+  b.title = "Four decorrelation runs (" + (n - 1) + " lacking inputs at most) with " + n +
+            " inputs per granule cell, i.e. a " + n + "-dimensional input space";
+  b.addEventListener("click", () => { gcCount("run-" + n, "CONNECTIVITY " + n + " inputs"); app.start(n); });
+  CON[n] = b;
+}
+function icb(left, caption, title) {
+  const b = el("button", "vbtn small ctl", { left: px(left), top: "0", width: px(52) });
+  b.textContent = caption; b.tabIndex = -1; b.title = title;
+  return b;
+}
+function isp(left, title) {
+  const d = el("div", "vspin ctl", { left: px(left), top: "0", width: px(52) });
+  d.title = title;
+  const inp = document.createElement("input");
+  inp.type = "number"; inp.value = "1"; inp.min = "1"; inp.tabIndex = -1;
+  const up = document.createElement("button"); up.className = "up"; up.textContent = "▲"; up.tabIndex = -1;
+  const dn = document.createElement("button"); dn.className = "dn"; dn.textContent = "▼"; dn.tabIndex = -1;
+  d.append(inp, up, dn);
+  const s = { el: d, inp, hi: 1, get value() { return +inp.value; }, set value(v) { inp.value = String(v); } };
+  const step = k => { s.value = Math.min(s.hi, Math.max(1, s.value + k)); app.conn.SPINCLICK(); };
+  up.addEventListener("click", () => step(1));
+  dn.addEventListener("click", () => step(-1));
+  inp.addEventListener("change", () => { s.value = Math.min(s.hi, Math.max(1, Math.round(+inp.value) || 1)); app.conn.SPINCLICK(); });
+  return s;
+}
+const PITCB = icb(Math.trunc(PNWOBJ * 3), "Iteration", "The iteration of which the lists of combinations are shown (spinner to the right)");
+const PITSP = isp(Math.trunc(PNWOBJ * 3 + PNWOBJ / 2), "Iteration of which the combination lists are shown (1-50)");
+const PTSCB = icb(Math.trunc(PNWOBJ * 4), "Timeslice", "The timeslice of which the lists of combinations are shown (spinner to the right)");
+const PTSSP = isp(Math.trunc(PNWOBJ * 4 + PNWOBJ / 2), "Timeslice of which the combination lists are shown");
+const PORCB = el("button", "vbtn small ctl", { left: px(Math.trunc(PNWOBJ * 5)), top: "0", width: px(Math.trunc(PNWOBJ)) });
+PORCB.textContent = "Input permutations"; PORCB.tabIndex = -1;
+PORCB.title = "Show the 256 input permutations of the GrCs as generated at random, or the same 'ordered' (each input at the place of its dimension, a lacking input replaced by a redundant one)";
+PORCB.addEventListener("click", () => app.conn.PORCLICK());
+const PLIST = [];
+for (let n = 0; n <= 4; n++) {
+  const d = el("div", "vlist", { left: px(Math.trunc(PNWOBJ * 3)), top: px(listTop(n)), width: px(Math.trunc(PNWOBJ * 3)), height: px(LIST_H), color: FCOLOR(n) });
+  PLIST.push(d);
+}
+const ui = {
+  setSpinners(it, ts, itHi, tsHi) { PITSP.value = it; PTSSP.value = ts; PITSP.hi = itHi; PTSSP.hi = tsHi; },
+  getSpinners() { return [PITSP.value, PTSSP.value]; },
+  setList(n, text) { PLIST[n].textContent = text.replace(/\r/g, "\n"); PLIST[n].scrollTop = 0; },
+  hideLists() { for (const d of PLIST) { d.textContent = ""; d.style.display = "none"; } },
+  showList(n) { PLIST[n].style.display = "block"; },
+  setPorCaption(ordered) { PORCB.textContent = ordered ? "Ordered combinations" : "Input permutations"; }
+};
+
+// ---------------------------------------------------------------------------------------------
+// Running: DORUN as a generator, paced to the speed of the original program
+// ---------------------------------------------------------------------------------------------
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+class App {
+  constructor() { this.speed = 1; this.seed = VFP_SEED; this.pm = null; this.run = 0; this.state = "wait"; this.inputs = 4; this.conn = null; }
+  // the form as it opens in a freshly started VFP (the random numbers start from the start-up state)
+  init() {
+    this.run++;
+    const rnd = this.pm !== null ? parkMiller(this.pm) : vfpRand(this.seed);
+    this.conn = new Connectivity(rnd, gfx, ui);
+    gfx.blank();
+    for (const d of PLIST) { d.textContent = ""; d.style.display = "block"; }   // the form as it opens
+    this.markCon(0);
+    this.state = "wait";
+    markRun();
+  }
+  markCon(n) { for (let k = 3; k <= 5; k++) CON[k].style.color = k === n ? ROOD : ZWART; }
+  // CONCB.Click: the chosen number of inputs in red, then DORUN
+  async start(n) {
+    this.run++;
+    const myRun = this.run, C = this.conn;
+    C.plPause = false; C.plBreak = false;
+    C.pnInputs = n; this.inputs = n;
+    this.markCon(n);
+    this.state = "run";
+    form.classList.add("busy");
+    markRun();
+    const gen = C.DORUN();
+    let due = performance.now();
+    for (let r = gen.next(); !r.done; r = gen.next()) {
+      if (myRun !== this.run) return;
+      due += r.value / this.speed / AFTER_FIRST;
+      let now = performance.now();
+      if (due > now + 4 || C.plPause) {
+        await sleep(Math.max(C.plPause ? 50 : 0, due - now));
+        if (myRun !== this.run) return;
+        now = performance.now();
+        if (C.plPause || due < now - 250) due = now;    // the browser lagged behind: do not try to catch up
+      }
+    }
+    if (myRun !== this.run) return;
+    this.state = "done";
+    form.classList.remove("busy");
+    markRun();
+  }
+  pause() { if (this.state === "run") { this.conn.plPause = !this.conn.plPause; markRun(); } }
+  stop() {
+    if (this.state !== "run") return;
+    this.conn.plBreak = true; this.conn.plPause = false;
+    this.run++;
+    this.state = "done";
+    form.classList.remove("busy");
+    markRun();
+  }
+  // compute a whole run at once (test: ?final=1)
+  final(n) {
+    const C = this.conn;
+    C.pnInputs = n; this.markCon(n);
+    const g = C.DORUN(); for (let r = g.next(); !r.done; r = g.next()) { /* */ }
+    this.state = "done"; markRun();
+  }
+}
+// the Interrupt / Resume and Stop buttons
+function markRun() {
+  const bi = document.getElementById("bint"), bs = document.getElementById("bstop");
+  if (!bi) return;
+  const running = app.state === "run", paused = !!(app.conn && app.conn.plPause);
+  const bg = document.getElementById("bgo");
+  if (bg) bg.classList.toggle("blink", !running);
+  bi.disabled = !running; bs.disabled = !running;
+  bi.textContent = paused ? "▶  Resume" : "❚❚  Interrupt";
+  bi.classList.toggle("paused", paused);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Panel
+// ---------------------------------------------------------------------------------------------
+const panel = document.getElementById("panel");
+const app = new App();
+function buildPanel() {
+  panel.innerHTML = "";
+  const add = (tag, cls, txt, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; (parent || panel).appendChild(e); return e; };
+  add("div", "ttl", "CONNECTIVITY");
+  add("div", "sub", "ELL article Part 2, Beunis 2022 – live demo");
+  const ctl = add("div", "row"); ctl.id = "ctl";
+  const bi = add("button", "", undefined, ctl); bi.id = "bint"; bi.tabIndex = -1;
+  bi.title = "Interrupt the run, and resume it";
+  bi.addEventListener("click", () => app.pause());
+  const bs = add("button", "", "■  Stop", ctl); bs.id = "bstop"; bs.tabIndex = -1;
+  bs.title = "Stop the run: the graphs stay as they are";
+  bs.addEventListener("click", () => app.stop());
+  const info = add("div"); info.id = "info";
+  const b = add("b", "", "Demo 4-1 – Fig. 16, p. 59", info);
+  info.appendChild(document.createTextNode(
+    "\nAddendum 'Random connectivity examined'.\n" +
+    "A 4D input space with 4 PPVs per axis: 256 timeslices, each affected by 256 GrCs with a random input " +
+    "permutation. Four decorrelation runs of 50 iterations of the unchanging signal S1 (with P = D = 1%), " +
+    "allowing 0, 1, 2 and 3 lacking inputs: a GrC with a lacking input fires at a wrong address.\n" +
+    "The buttons 3 / 4 / 5 inputs start the same runs in 3, 4 or 5 dimensions. With the spinners Iteration and " +
+    "Timeslice the 256 input permutations of every timeslice can be viewed, also 'ordered'.\n" +
+    "'(Re)Start this demo' repeats exactly the run of Fig. 16 (the random numbers of a freshly started Visual FoxPro)."));
+  const lk = add("div"); lk.id = "links";
+  const a = add("a", "", "RA and WA counts (Addendum)", lk); a.href = "counts.html?dims=4&ppv=4,4,4,4&sur=0";
+  a.title = "Counts of right and wrong addressings as a function of dimensionality, PPVs per axis and surnumerary dendrites";
+  lk.appendChild(document.createElement("br"));
+  const a2 = add("a", "", "Demos 80–83 – Figs. 7 and 8, p. 34 (DECORRELATOR)", lk); a2.href = "index.html?demo=80";
+  a2.title = "The decorrelation procedure applied to the Purkinje cell (iBCM rule, Ca-threshold)";
+  const spd = add("div", "row"); spd.id = "spd";
+  const sl = add("span", "", "Speed ", spd); sl.style.cssText = "font-weight:bold;font-size:10px;line-height:19px";
+  sl.title = "Playback speed, as with a video player.\nAt 1x the demo runs twice as fast as the original program in Visual FoxPro 9.\nCan be changed while the demo is running.";
+  for (const sp of SPEEDS) {
+    const b = add("button", "", sp + "×", spd); b.dataset.speed = sp; b.tabIndex = -1;
+    b.addEventListener("click", () => { app.speed = sp; markPanel(); updateUrl(); });
+  }
+  const go = add("button", "", "(Re)Start this demo"); go.id = "bgo"; go.tabIndex = -1;
+  go.title = "Start demo 4-1 (4 inputs) as in the article: with the random numbers of a freshly started Visual FoxPro, " +
+             "the run is identical to Fig. 16 and the video.\nThe buttons '3 / 4 / 5 inputs' continue the random sequence, as in VFP: another run each time.";
+  go.addEventListener("click", () => { gcCount("run-4-1", "Demo 4-1 started"); app.init(); app.start(4); });
+}
+function markPanel() {
+  for (const b of panel.querySelectorAll("button[data-speed]")) b.classList.toggle("on", +b.dataset.speed === app.speed);
+}
+function updateUrl() {
+  const p = new URLSearchParams(location.search);
+  if (app.speed !== 1) p.set("speed", String(app.speed)); else p.delete("speed");
+  const q = p.toString();
+  try { history.replaceState(null, "", location.pathname + (q ? "?" + q : "") + location.hash); } catch (e) { /* file:// */ }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Start-up, scaling
+// ---------------------------------------------------------------------------------------------
+const stage = document.getElementById("stage");
+function fit() {
+  const W = FORM_W + PANEL_W;
+  Object.assign(panel.style, { left: FORM_W + "px", width: PANEL_W + "px", height: PNH + "px" });
+  Object.assign(stage.style, { width: W + "px", height: PNH + "px" });
+  let k = Math.min(window.innerWidth / W, window.innerHeight / PNH);
+  if (k > 0.96 && k < 1.04) k = 1;
+  stage.style.transform = "scale(" + k + ")";
+  stage.style.left = Math.max(0, (window.innerWidth - W * k) / 2) + "px";
+  stage.style.top = Math.max(0, (window.innerHeight - PNH * k) / 2) + "px";
+}
+window.addEventListener("resize", fit);
+
+const params = new URLSearchParams(location.search);
+let speed = parseFloat(params.get("speed") || "1");
+if (!(speed > 0)) speed = 1;
+app.speed = Math.min(16, Math.max(0.25, speed));
+const seedParam = params.get("seed"), pmParam = params.get("pm");
+if (seedParam !== null && /^\d+$/.test(seedParam)) app.seed = parseInt(seedParam, 10);   // as RAND(seed) in VFP
+if (pmParam !== null && /^\d+$/.test(pmParam)) app.pm = parseInt(pmParam, 10);            // (test) Park-Miller
+buildPanel();
+markPanel();
+fit();
+app.init();
+window.connectivity = app;   // for inspection in the browser console
+
+if (params.get("final") === "1") {   // test: compute the whole run at once and show the end result
+  const n = [3, 4, 5].includes(+params.get("inputs")) ? +params.get("inputs") : 4;
+  app.final(n);
+}
+
+// GoatCounter: count a page view or an event; blocked or unavailable counters are silently ignored.
+function gcCount(path, title, event = true, tries = 0) {
+  const gc = window.goatcounter;
+  if (gc && typeof gc.count === "function") {
+    try { gc.count({ path: path, title: title, event: event }); } catch (e) { /* ignore */ }
+  } else if (tries < 20) {
+    setTimeout(() => gcCount(path, title, event, tries + 1), 500);
+  }
+}
+gcCount(location.pathname, "CONNECTIVITY", false);
+
+// Tooltips on touch screens: press and hold a control (about half a second) to see its explanation.
+const tipBox = document.createElement("div");
+tipBox.id = "tip";
+document.body.appendChild(tipBox);
+let lpTimer = null, lpFired = false, lpStart = null, tipHide = null, lastPointerType = "mouse";
+function hideTip() { tipBox.style.display = "none"; clearTimeout(tipHide); }
+function showTip(el) {
+  tipBox.textContent = el.title;
+  tipBox.style.display = "block";
+  const r = el.getBoundingClientRect(), tw = tipBox.offsetWidth, th = tipBox.offsetHeight;
+  let x = Math.min(Math.max(4, r.left + r.width / 2 - tw / 2), window.innerWidth - tw - 4);
+  let y = r.bottom + 6;
+  if (y + th > window.innerHeight - 4) y = Math.max(4, r.top - th - 6);
+  tipBox.style.left = x + "px"; tipBox.style.top = y + "px";
+  clearTimeout(tipHide); tipHide = setTimeout(hideTip, 10000);
+}
+function cancelLongPress() { clearTimeout(lpTimer); lpTimer = null; }
+document.addEventListener("pointerdown", e => {
+  lastPointerType = e.pointerType;
+  hideTip();
+  if (e.pointerType !== "touch") return;
+  const el = e.target.closest("[title]");
+  if (!el || !el.title) return;
+  lpFired = false; lpStart = [e.clientX, e.clientY];
+  lpTimer = setTimeout(() => { lpTimer = null; lpFired = true; showTip(el); }, 500);
+}, true);
+document.addEventListener("pointermove", e => {
+  if (lpTimer && Math.hypot(e.clientX - lpStart[0], e.clientY - lpStart[1]) > 10) cancelLongPress();
+}, true);
+document.addEventListener("pointerup", cancelLongPress, true);
+document.addEventListener("pointercancel", cancelLongPress, true);
+document.addEventListener("click", e => {   // a long press is not a click
+  if (lpFired) { lpFired = false; e.stopPropagation(); e.preventDefault(); }
+}, true);
+document.addEventListener("contextmenu", e => { if (lastPointerType === "touch") e.preventDefault(); });
+</script>
+</body>
+</html>

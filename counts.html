@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en" translate="no" class="notranslate">
+<head>
+<meta charset="utf-8">
+<meta name="google" content="notranslate">
+<!-- Privacy-friendly visitor counter (GoatCounter: no cookies, no personal data); localhost is not counted. -->
+<script data-goatcounter="https://simcor2.goatcounter.com/count"
+        data-goatcounter-settings='{"no_onload": true}'
+        async src="https://gc.zgo.at/count.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RA and WA counts – Beunis (2022b)</title>
+<meta name="description" content="Counts of right and wrong addressings (RAs and WAs) as a function of ISU dimensionality, PPVs per axis and surnumerary dendrites, accompanying R. Beunis (2022), The electrosensory lateral line lobe in mormyrid fish: a stepping stone to the understanding of the cerebellum? Part 2 (the cerebellum), Addendum 'Random connectivity examined'.">
+<!--
+  RAWA_COUNTS - web version (HTML/JavaScript) of the author's Visual FoxPro 9.0 program that counts
+  'right addressings' (RAs) and 'wrong addressings' (WAs) (R. Beunis, 2022; vfp/rawa_counts.prg).
+  One self-contained file, no external libraries.
+
+  Article: Beunis R. (2022b) The electrosensory lateral line lobe in mormyrid fish : a stepping stone to the
+           understanding of the cerebellum ? (Part 2/2 : the cerebellum). Zenodo, doi:10.5281/zenodo.17613147
+
+  The translation follows the VFP code statement by statement and produces the same text (checked against
+  runs in Visual FoxPro 9). VFP prints the numbers in fixed-width fields; a number that does not fit is shown
+  there as asterisks or loses its leading digits (e.g. 1295 WAs is shown as '295'). Here such a field is
+  widened, so that every number is shown in full. (count(..., true) reproduces the VFP fields; it is only
+  used to check the translation against VFP.)
+
+  URL parameters:  ?dims=4&ppv=4,4,4,4&sur=0   (fills in the inputs and counts at once)
+-->
+<style>
+  :root { --bg: #f4f4f2; --panel: #ffffff; --text: #1d1d1b; --muted: #5c5c58; --line: #d6d6d0;
+          --accent: #1f5fa8; --btn: #1f5fa8; --btntext: #ffffff; --out: #fbfbfa; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1b1c1e; --panel: #242528; --text: #e8e8e4; --muted: #a3a39d;
+          --line: #3a3b3f; --accent: #8ab8ee; --btn: #3b78c4; --btntext: #ffffff; --out: #1f2023; }
+  }
+  :root[data-theme="dark"] { --bg: #1b1c1e; --panel: #242528; --text: #e8e8e4; --muted: #a3a39d;
+          --line: #3a3b3f; --accent: #8ab8ee; --btn: #3b78c4; --btntext: #ffffff; --out: #1f2023; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+               font: 15px/1.45 Arial, Helvetica, "Liberation Sans", sans-serif; }
+  main { max-width: 1180px; margin: 0 auto; padding: 16px; box-sizing: border-box; }
+  h1 { font-size: 21px; margin: 4px 0 2px 0; }
+  .ref { color: var(--muted); font-size: 13px; margin: 0 0 12px 0; }
+  .ref a { color: var(--accent); }
+  .intro { font-size: 14px; margin: 0 0 14px 0; max-width: 900px; }
+  form { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px;
+         display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: flex-end; }
+  fieldset { border: 0; margin: 0; padding: 0; }
+  legend, .lbl { font-size: 13px; color: var(--muted); padding: 0; margin-bottom: 4px; display: block; }
+  .axes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .axes label { display: flex; align-items: center; gap: 3px; font-weight: bold; }
+  input[type=number], select { font: 15px Arial, Helvetica, sans-serif; width: 58px; padding: 4px 5px;
+         background: var(--out); color: var(--text); border: 1px solid var(--line); border-radius: 4px; }
+  select { width: 64px; }
+  input[type=number]:disabled { opacity: 0.35; }
+  .chk { font-size: 13px; display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  button { font: bold 15px Arial, Helvetica, sans-serif; padding: 7px 22px; border: 0; border-radius: 5px;
+           background: var(--btn); color: var(--btntext); cursor: pointer; }
+  button:hover { filter: brightness(1.1); }
+  #status { font-size: 13px; color: var(--muted); min-height: 18px; margin: 10px 0 4px 0; }
+  #summary { font-size: 14px; margin: 0 0 8px 0; }
+  pre#out { background: var(--out); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px;
+            margin: 0; font: 13px/1.35 "Courier New", Consolas, monospace; white-space: pre-wrap;
+            overflow-wrap: anywhere; min-height: 200px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>RA and WA counts</h1>
+  <p class="ref">Beunis R. (2022). The electrosensory lateral line lobe in mormyrid fish : a stepping stone to the
+    understanding of the cerebellum ? (Part 2/2 : the cerebellum), Addendum 'Random connectivity examined'.
+    <a href="https://doi.org/10.5281/zenodo.17613147">doi:10.5281/zenodo.17613147</a>
+    · Other live demos of Part 2: <a href="connectivity.html">demo 4-1 (Fig. 16)</a>,
+    <a href="index.html?demo=80">demos 80–83 (Figs. 7 and 8)</a></p>
+  <p class="intro">Every timeslice of the A-path is assumed to be affected by a set of granule cells large enough to
+    contain all input permutations. The program lists all permutations, lists them again after 'ordering'
+    (for the granule cell only the combination of its inputs matters), counts the right addressings (RAs) and
+    wrong addressings (WAs) with the RA ratio, and shows how many permutations cause a given number of WAs.</p>
+
+  <form id="f" autocomplete="off">
+    <label><span class="lbl">ISU dimensions</span>
+      <select id="dims"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option></select></label>
+    <fieldset><legend>PPVs on each axis (1–99)</legend>
+      <div class="axes" id="axes"></div></fieldset>
+    <label><span class="lbl">Surnumerary dendrites</span>
+      <select id="sur"><option selected>0</option><option>1</option><option>2</option></select></label>
+    <button type="submit">Count</button>
+  </form>
+  <div id="status"></div>
+  <div id="summary"></div>
+  <pre id="out"></pre>
+</main>
+
+<script>
+"use strict";
+const AO = 96; // the 'ASCII offset' between 1 and ASC('a')
+const chr = n => String.fromCharCode(n);
+
+// VFP STR(n,width) for a whole number >= 0: asterisks when it does not fit (exact), else a widened field.
+function vstr(n, width, exact) {
+  const s = String(n);
+  if (s.length > width) return exact ? "*".repeat(width) : s;
+  return s.padStart(width);
+}
+// VFP STR(x) (width 10, no decimals): rounds half up.
+const strRound = x => String(Math.floor(x + 0.5)).padStart(10);
+
+// ALFABETIC: the characters in alphabetical order.
+const alfabetic = s => s.split("").sort().join("");
+
+// ORDERINPUTS: for the GrC the order of its inputs does not matter, so the permutation may be 'ordered':
+// 'a' in place 1, 'b' in place 2 ... ; a lacking input leaves a blank, then filled with a redundant input.
+function orderinputs(perm, dims, sur) {
+  const ordered = new Array(dims + sur).fill(" ");
+  let rest = perm;
+  for (let i = 1; i <= dims + sur; i++) {
+    const c = chr(i + AO);
+    if (rest.includes(c)) { ordered[i - 1] = c; rest = rest.replace(c, ""); }
+  }
+  for (const c of alfabetic(rest)) {
+    // (only in 1D is there no blank left; VFP's STUFF at place 0 changes nothing to the first character used)
+    const k = ordered.indexOf(" ");
+    if (k >= 0) ordered[k] = c;
+  }
+  return ordered.join("");
+}
+
+// The nested loops nA, nB, ..., nE, nP, nQ of the VFP program, with their EXITs:
+// a loop of a dimension that is not there runs once.
+function permutations(dims, sur) {
+  const r = Array.from({ length: dims }, (_, i) => i + 1), one = [1];
+  const loops = [r, dims >= 2 ? r : one, dims >= 3 ? r : one, dims >= 4 ? r : one, dims >= 5 ? r : one,
+                 sur >= 1 ? r : one, sur >= 2 ? r : one];
+  const used = [true, true, dims > 2, dims > 3, dims > 4, sur >= 1, sur === 2];
+  const out = [];
+  (function rec(k, prefix) {
+    if (k === loops.length) { out.push(prefix); return; }
+    for (const n of loops[k]) rec(k + 1, prefix + (used[k] ? chr(n + AO) : ""));
+  })(0, "");
+  return out;
+}
+
+// Runs the program; returns its output as an array of lines (one per '?') plus the totals.
+function count(dims, ppv, sur, exact) {
+  const pp = {};
+  ppv.forEach((v, i) => { pp[chr(i + 1 + AO)] = v; });
+  const out = [], p = s => out.push(s);
+  if (dims > 5) { p("Too many dimensions"); return { lines: out }; }
+  if (sur > 2) { p("Too many surnumerary dendrites"); return { lines: out }; }
+
+  p("Your inputs : ");
+  p("ISU dimensions : " + dims);
+  for (let n = 1; n <= dims; n++) p("PPVs on " + chr(n + AO) + "-axis : " + pp[chr(n + AO)]);
+  p("Added surnumerary dendrites : " + sur);
+  p("");
+
+  // The list of all the possible permutations and of their 'ordered' combinations
+  const perms = permutations(dims, sur);
+  const combs = perms.map(x => orderinputs(x, dims, sur).slice(0, dims));
+  p("The original permutation list");
+  p(perms.map(x => x + " ").join(""));
+  p(""); p("");
+  p("The 'ordered' permutation list");
+  p(combs.map(x => x + " ").join(""));
+  p(""); p("");
+
+  let raCount = 0, waCount = 0, nCount = 0;
+  const waCats = [];
+  const kinds = { 1: "row", 2: "plane", 3: "volume", 4: "hypervolume" };
+  for (const comb of combs) {
+    nCount++;
+    // nWAsubcount is multiplied with the PPV number on each lacking dimension
+    let waSub = 1, waExpr = " (1*", lis = "";
+    for (let q = 1; q <= comb.length; q++) {
+      if (comb[q - 1] === chr(q + AO)) continue; // this input is not lacking
+      const ref = chr(q + 96);
+      lis += ref;
+      waSub *= pp[ref];
+      waExpr += pp[ref] + "*";
+    }
+    // subtract 1: every combination fires once at the right time (the RA)
+    waSub -= 1;
+    waExpr = waExpr.slice(0, -1) + "-1)";
+    waExpr = exact ? waExpr.slice(0, 15).padEnd(15) : waExpr.padEnd(15);
+
+    const t = "GrC at RA fires every time the A-path engages a node in the " + lis + " ";
+    p(comb + " " + vstr(1, 2, exact) + " RA " + vstr(waSub, 5, exact) + " WAs " + waExpr +
+      "  Lacking inputs : " + (lis + "   ").slice(0, 4) +
+      (lis.length === 0 ? "" : " (" + t + (kinds[lis.length] || "") + " in the " + comb.length + "D ISU)"));
+    if (nCount % 20 === 0) { p(""); p(""); } // (VFP waits for a key after every 20 lines)
+
+    raCount++;
+    waCount += waSub;
+    waCats.push(exact ? vstr(waSub, 7, true) : waSub);
+  }
+
+  p("");
+  p("RA and WA count totals and the RA/(RA+WA) ratio");
+  p(vstr(raCount, 6, exact) + " RAs " + vstr(waCount, 6, exact) + " WAs " +
+    strRound(raCount * 100 / (raCount + waCount)) + "% RAs");
+  p("");
+
+  // How many input combinations produce a specific number of WAs ? (in the order of first appearance)
+  p("How many permutations produce a specific amount of WAs ?");
+  p("");
+  const seen = new Map();
+  for (const x of waCats) seen.set(x, (seen.get(x) || 0) + 1);
+  for (const [x, n] of seen) {
+    const shown = exact ? x.slice(-3) : String(x).padStart(3);
+    p(vstr(n, 5, exact) + " permutations causing " + shown + " WAs / causing a GrC to fire " + shown +
+      " times at a wrong time");
+  }
+  p("");
+  p("Finished !");
+  return { lines: out, raCount, waCount, nPerms: perms.length };
+}
+
+// ------------------------------------------------------------------ input screen
+const $ = id => document.getElementById(id);
+const axes = $("axes");
+const ppvInputs = [];
+for (let i = 0; i < 5; i++) {
+  const lab = document.createElement("label");
+  lab.textContent = chr(97 + i);
+  const inp = document.createElement("input");
+  Object.assign(inp, { type: "number", min: 1, max: 99, step: 1, value: 4 });
+  inp.setAttribute("aria-label", "PPVs on " + chr(97 + i) + "-axis");
+  lab.appendChild(inp);
+  axes.appendChild(lab);
+  ppvInputs.push(inp);
+}
+function updateAxes() {
+  const d = +$("dims").value;
+  ppvInputs.forEach((inp, i) => { inp.disabled = i >= d; });
+}
+$("dims").addEventListener("change", updateAxes);
+
+function readInputs() {
+  const dims = +$("dims").value, sur = +$("sur").value;
+  const ppv = ppvInputs.map(inp => {
+    let v = Math.round(+inp.value);
+    if (!Number.isFinite(v) || v < 1) v = 1;
+    if (v > 99) v = 99;
+    inp.value = v;
+    return v;
+  });
+  return { dims, ppv, sur };
+}
+
+let counted = false;
+function run() {
+  const a = readInputs();
+  $("status").textContent = "Counting ...";
+  $("out").textContent = "";
+  $("summary").textContent = "";
+  setTimeout(() => { // let the browser show "Counting ..." first
+    const r = count(a.dims, a.ppv, a.sur, false);
+    $("out").textContent = r.lines.join("\n");
+    $("status").textContent = "";
+    if (r.nPerms) {
+      const pct = (r.raCount * 100 / (r.raCount + r.waCount)).toFixed(1);
+      $("summary").textContent = r.nPerms.toLocaleString("en") + " permutations · " +
+        r.raCount.toLocaleString("en") + " RAs · " + r.waCount.toLocaleString("en") + " WAs · " + pct + " % RAs";
+    }
+    const q = "?dims=" + a.dims + "&ppv=" + a.ppv.slice(0, a.dims).join(",") + "&sur=" + a.sur;
+    try { history.replaceState(null, "", location.pathname + q + location.hash); } catch (e) { /* ignore */ }
+    gcCount(location.pathname + q, "RA and WA counts", counted);
+    counted = true;
+  }, 20);
+}
+$("f").addEventListener("submit", e => { e.preventDefault(); run(); });
+
+// GoatCounter: count a page view or an event; blocked or unavailable counters are silently ignored.
+function gcCount(path, title, event = true, tries = 0) {
+  const gc = window.goatcounter;
+  if (gc && typeof gc.count === "function") {
+    try { gc.count({ path: path, title: title, event: event }); } catch (e) { /* ignore */ }
+  } else if (tries < 20) {
+    setTimeout(() => gcCount(path, title, event, tries + 1), 500);
+  }
+}
+
+// Inputs from the address (?dims=4&ppv=4,4,4,4&sur=0); without them the article's example (4D, 4 PPVs)
+const P = new URLSearchParams(location.search);
+if (P.has("dims")) $("dims").value = String(Math.min(5, Math.max(1, Math.round(+P.get("dims")) || 4)));
+if (P.has("sur")) $("sur").value = String(Math.min(2, Math.max(0, Math.round(+P.get("sur")) || 0)));
+if (P.has("ppv")) P.get("ppv").split(",").forEach((v, i) => { if (i < 5 && v.trim() !== "") ppvInputs[i].value = v.trim(); });
+updateAxes();
+run();
+</script>
+</body>
+</html>
