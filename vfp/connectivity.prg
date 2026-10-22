@@ -10,9 +10,11 @@
 * ... lacking inputs. The buttons '3/4/5 inputs' start the runs in 3, 4 or 5 dimensions.
 * Right half (not used in the article): the 'ordered' input combinations, with the timeslices that a chosen
 * combination affects; the buttons '3/4/5 inputs' of the right half first show these lists, then do the runs
-* of the left half, using the results stored in CONNECT.DBF when they exist.
+* of the left half, using the results stored in CONNECT.DBF when they exist. Click a combination in one of
+* these lists to see which timeslices it affects.
 *
-* Usage:  DO connectivity                    the whole form (both halves), maximized
+* Usage:  DO connectivity                    the whole form; maximize it to see its right half (stand-alone
+*                                            the form is the subclass CONNECTIVITYSA: maximizable)
 *         DO connectivity WITH .T.,"1*I"     demo-4-1 as in the article reader: the left half, and the run
 *                                            with 4 inputs starts at once (with '*' the stored results of a
 *                                            former run in CONNECT.DBF are shown, when they exist)
@@ -57,7 +59,8 @@ PUBLIC pnHMem,pnR
 pnHMem=30
 pnR=1
 
-oConnectivity=CREATEOBJECT('CONNECTIVITY',plCalled,pcCMD,.F.,IIF(plCalled,"demo-4-"+pcCMD,"CONNECTIVITY"))
+&& demo-4-1: the form as in the article reader; stand-alone: the same form, but maximizable (CONNECTIVITYSA)
+oConnectivity=CREATEOBJECT(IIF(plCalled,'CONNECTIVITY','CONNECTIVITYSA'),plCalled,pcCMD,.F.,IIF(plCalled,"demo-4-"+pcCMD,"CONNECTIVITY"))
 oConnectivity.Show(1)
 
 && Restore the settings and quit
@@ -69,6 +72,16 @@ CLOSE TABLES
 RETURN
 
 && Class definitions ---------------------------------------------------------------------------------------
+
+&& GitHub version: the CONNECTIVITY form for the stand-alone start. In the article reader the form opens
+&& maximized and has no maximize button; stand-alone it opens small, and only when it is maximized does its
+&& right half appear (the 'ordered' combination lists, in which a combination can be clicked). Without themes,
+&& as in the author's stand-alone connectivity.prg (with themes the form did not maximize in the tests).
+DEFINE CLASS CONNECTIVITYSA AS CONNECTIVITY
+	MaxButton			= .T.
+	MinButton			= .T.
+	Themes				= .F.
+ENDDEFINE
 
 && BASEFORM (of CEREBREADER.PRG): only its properties and Init, which the CONNECTIVITY form uses
 DEFINE CLASS BASEFORM AS FORM
